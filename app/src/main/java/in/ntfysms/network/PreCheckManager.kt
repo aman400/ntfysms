@@ -17,7 +17,7 @@ sealed class PreCheckResult {
 }
 
 class PreCheckManager(
-    private val context: Context,
+    private val context: Context?,
     private val okHttpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
         .readTimeout(5, TimeUnit.SECONDS)
@@ -54,20 +54,24 @@ class PreCheckManager(
     }
 
     fun isInternetAvailable(): Boolean {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+        val ctx = context ?: return true // Default true in test environments without context
+        val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
         val activeNetwork = cm.activeNetwork ?: return false
         val caps = cm.getNetworkCapabilities(activeNetwork) ?: return false
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
     fun isVpnConnected(): Boolean {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-        if (cm != null) {
-            val activeNetwork = cm.activeNetwork
-            if (activeNetwork != null) {
-                val caps = cm.getNetworkCapabilities(activeNetwork)
-                if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
-                    return true
+        val ctx = context
+        if (ctx != null) {
+            val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            if (cm != null) {
+                val activeNetwork = cm.activeNetwork
+                if (activeNetwork != null) {
+                    val caps = cm.getNetworkCapabilities(activeNetwork)
+                    if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
+                        return true
+                    }
                 }
             }
         }
@@ -100,7 +104,7 @@ class PreCheckManager(
                 .build()
 
             clientCall(request)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Fallback to checking root server URL
             try {
                 val cleanUrl = serverUrl.trim().trimEnd('/')
