@@ -28,7 +28,10 @@ class SmsForwarderService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = createNotification()
+        val title = intent?.getStringExtra(EXTRA_TITLE) ?: "NtfySMS Active"
+        val text = intent?.getStringExtra(EXTRA_TEXT) ?: "Monitoring incoming SMS and forwarding OTPs"
+        val notification = createNotification(title, text)
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
                 NOTIFICATION_ID,
@@ -49,7 +52,7 @@ class SmsForwarderService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun createNotification(): Notification {
+    private fun createNotification(title: String, text: String): Notification {
         val openAppIntent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -61,8 +64,8 @@ class SmsForwarderService : Service() {
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("NtfySMS Active")
-            .setContentText("Monitoring incoming SMS and forwarding OTPs")
+            .setContentTitle(title)
+            .setContentText(text)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -85,8 +88,10 @@ class SmsForwarderService : Service() {
     }
 
     companion object {
-        private const val CHANNEL_ID = "ntfy_sms_forwarder_channel"
-        private const val NOTIFICATION_ID = 1001
+        const val CHANNEL_ID = "ntfy_sms_forwarder_channel"
+        const val NOTIFICATION_ID = 1001
+        private const val EXTRA_TITLE = "extra_notification_title"
+        private const val EXTRA_TEXT = "extra_notification_text"
 
         fun startService(context: Context) {
             val intent = Intent(context, SmsForwarderService::class.java)
@@ -95,6 +100,40 @@ class SmsForwarderService : Service() {
             } else {
                 context.startService(intent)
             }
+        }
+
+        fun updateNotificationStatus(context: Context, title: String, text: String) {
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                ?: return
+
+            val openAppIntent = Intent(context, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                0,
+                openAppIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentIntent(pendingIntent)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setOngoing(true)
+                .build()
+
+            manager.notify(NOTIFICATION_ID, notification)
+        }
+
+        fun resetToDefaultStatus(context: Context) {
+            updateNotificationStatus(
+                context,
+                "NtfySMS Active",
+                "Monitoring incoming SMS and forwarding OTPs"
+            )
         }
 
         fun stopService(context: Context) {

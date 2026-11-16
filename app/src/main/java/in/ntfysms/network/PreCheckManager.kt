@@ -3,11 +3,12 @@ package `in`.ntfysms.network
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import `in`.ntfysms.data.AppSettings
+import `in`.ntfysms.data.DeliveryNode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.NetworkInterface
 import java.util.concurrent.TimeUnit
 
@@ -16,7 +17,7 @@ sealed class PreCheckResult {
     data class Failed(val reason: String) : PreCheckResult()
 }
 
-class PreCheckManager(
+open class PreCheckManager(
     private val context: Context?,
     private val okHttpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(5, TimeUnit.SECONDS)
@@ -24,29 +25,40 @@ class PreCheckManager(
         .build()
 ) {
 
-    suspend fun verifyPreChecks(settings: AppSettings): PreCheckResult = withContext(Dispatchers.IO) {
-        // 1. Check Internet Connection if required
-        if (settings.requireInternet) {
+    open suspend fun verifyNodePreChecks(node: DeliveryNode): PreCheckResult = withContext(Dispatchers.IO) {
+        if (!node.isEnabled) {
+            return@withContext PreCheckResult.Failed("Node disabled")
+        }
+
+        if (node.serverUrl.isBlank()) {
+            return@withContext PreCheckResult.Failed("Server URL is empty")
+        }
+
+        // 1. Node-level Internet Check
+        if (node.requireInternet) {
             if (!isInternetAvailable()) {
-                return@withContext PreCheckResult.Failed("No active internet connection")
+                return@withContext PreCheckResult.Failed("Internet connection unavailable for ${node.name}")
             }
         }
 
-        // 2. Check VPN Connection if required
-        if (settings.requireVpn) {
+        // 2. Node-level VPN Check
+        if (node.requireVpn) {
             if (!isVpnConnected()) {
-                return@withContext PreCheckResult.Failed("Active VPN connection required (e.g. Tailscale, WireGuard)")
+                return@withContext PreCheckResult.Failed("VPN required for ${node.name} (Awaiting Tailscale/VPN)")
             }
         }
 
-        // 3. Check Target Server Healthcheck if required
-        if (settings.requireHealthcheck) {
-            val targetUrl = settings.activeServerUrl
-            if (targetUrl.isNotBlank()) {
-                val healthResult = checkServerHealth(targetUrl)
-                if (healthResult is PreCheckResult.Failed) {
-                    return@withContext healthResult
-                }
+        // 3. Node-level Custom Server Healthcheck Ping
+        if (node.requireHealthcheck) {
+            val healthResult = checkCustomServerHealth(
+                serverUrl = node.serverUrl,
+                customUrl = node.customHealthcheckUrl,
+                method = node.healthcheckMethod,
+                headers = node.healthcheckHeaders,
+                expectedStatus = node.healthcheckExpectedStatus
+            )
+            if (healthResult is PreCheckResult.Failed) {
+                return@withContext PreCheckResult.Failed("Healthcheck failed for ${node.name}: ${healthResult.reason}")
             }
         }
 
@@ -54,7 +66,7 @@ class PreCheckManager(
     }
 
     fun isInternetAvailable(): Boolean {
-        val ctx = context ?: return true // Default true in test environments without context
+        val ctx = context ?: return true // Default true in test environment without context
         val cm = ctx.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
         val activeNetwork = cm.activeNetwork ?: return false
         val caps = cm.getNetworkCapabilities(activeNetwork) ?: return false
@@ -93,44 +105,61 @@ class PreCheckManager(
         return false
     }
 
-    suspend fun checkServerHealth(serverUrl: String): PreCheckResult = withContext(Dispatchers.IO) {
+    suspend fun checkCustomServerHealth(
+        serverUrl: String,
+        customUrl: String = "",
+        method: String = "GET",
+        headers: String = "",
+        expectedStatus: Int = 200
+    ): PreCheckResult = withContext(Dispatchers.IO) {
         try {
-            val cleanUrl = serverUrl.trim().trimEnd('/')
-            val healthUrl = "$cleanUrl/health"
-
-            val request = Request.Builder()
-                .url(healthUrl)
-                .get()
-                .build()
-
-            clientCall(request)
-        } catch (_: Exception) {
-            // Fallback to checking root server URL
-            try {
+            val targetUrl = if (customUrl.isNotBlank()) {
+                customUrl.trim()
+            } else {
                 val cleanUrl = serverUrl.trim().trimEnd('/')
-                val rootRequest = Request.Builder()
-                    .url(cleanUrl)
-                    .head()
-                    .build()
-                clientCall(rootRequest)
-            } catch (rootError: Exception) {
-                PreCheckResult.Failed("Server healthcheck ping failed: ${rootError.javaClass.simpleName}")
+                if (cleanUrl.endsWith("/health")) cleanUrl else "$cleanUrl/health"
             }
+
+            val requestBuilder = Request.Builder().url(targetUrl)
+
+            when (method.uppercase()) {
+                "HEAD" -> requestBuilder.head()
+                "POST" -> requestBuilder.post(ByteArray(0).toRequestBody(null))
+                else -> requestBuilder.get()
+            }
+
+            if (headers.isNotBlank()) {
+                headers.split("\n", ",").forEach { line ->
+                    val parts = line.split(":", limit = 2)
+                    if (parts.size == 2) {
+                        requestBuilder.addHeader(parts[0].trim(), parts[1].trim())
+                    }
+                }
+            }
+
+            val request = requestBuilder.build()
+            clientCallCustom(request, expectedStatus)
+        } catch (e: Exception) {
+            PreCheckResult.Failed("Healthcheck request error: ${e.message}")
         }
     }
 
-    private fun clientCall(request: Request): PreCheckResult {
+    suspend fun checkServerHealth(serverUrl: String): PreCheckResult = withContext(Dispatchers.IO) {
+        checkCustomServerHealth(serverUrl = serverUrl)
+    }
+
+    private fun clientCallCustom(request: Request, expectedStatus: Int): PreCheckResult {
         return try {
             okHttpClient.newCall(request).execute().use { response ->
-                if (response.isSuccessful || response.code == 401 || response.code == 403 || response.code == 404) {
-                    // Server responded -> host is reachable
+                val code = response.code
+                if (code == expectedStatus || (expectedStatus == 200 && response.isSuccessful) || code in listOf(200, 204, 401, 403, 404)) {
                     PreCheckResult.Passed
                 } else {
-                    PreCheckResult.Failed("Healthcheck HTTP status: ${response.code}")
+                    PreCheckResult.Failed("HTTP status $code (expected $expectedStatus)")
                 }
             }
         } catch (e: Exception) {
-            PreCheckResult.Failed("Server healthcheck unreachable: ${e.message}")
+            PreCheckResult.Failed("Unreachable: ${e.message}")
         }
     }
 }

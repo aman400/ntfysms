@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -72,52 +73,10 @@ fun DashboardScreen(
         MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "NtfySMS Dashboard",
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                actions = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(end = 12.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    color = activeBg,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = if (uiState.isEnabled) "Active" else "Paused",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = activeFg
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Switch(
-                            checked = uiState.isEnabled,
-                            onCheckedChange = { viewModel.toggleMasterSwitch(it) }
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            )
-        }
-    ) { innerPadding ->
+    Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -152,40 +111,101 @@ fun DashboardScreen(
                             fontWeight = FontWeight.Bold
                         )
 
-                        if (uiState.serverUrl.isBlank()) {
+                        val activeNodes = uiState.activeNodes
+                        if (activeNodes.isEmpty()) {
                             Text(
-                                text = "No delivery server URL configured yet.",
+                                text = "No active target delivery nodes configured yet.",
                                 fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.error
                             )
                         } else {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = if (uiState.serverType == ServerType.GOTIFY) "Gotify Server" else "ntfy Server",
-                                        fontWeight = FontWeight.SemiBold,
-                                        fontSize = 14.sp
-                                    )
-                                    Text(
-                                        text = uiState.serverUrl,
-                                        fontSize = 12.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                                    )
-                                }
-                                Box(
-                                    modifier = Modifier
-                                        .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp))
-                                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                            activeNodes.forEach { node ->
+                                val (icon, badgeColor) = if (node.serverType == ServerType.GOTIFY) "🔔" to Color(0xFF0284C7) else "🚀" to Color(0xFF16A34A)
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = uiState.serverType,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(text = "$icon ", fontSize = 14.sp)
+                                        Column {
+                                            Text(
+                                                text = node.name,
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = 13.sp
+                                            )
+                                            Text(
+                                                text = node.serverUrl,
+                                                fontFamily = FontFamily.Monospace,
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                                            )
+                                        }
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .background(badgeColor, RoundedCornerShape(6.dp))
+                                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                                    ) {
+                                        Text(
+                                            text = node.serverType,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color.White
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = onNavigateToSettings,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Configure Target Nodes & Credentials")
+                        }
+                    }
+                }
+            }
+
+            // Node-Level Pre-Checks Summary Card
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "Node Pre-Checks Summary",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        val activeNodes = uiState.activeNodes
+                        if (activeNodes.isEmpty()) {
+                            Text(
+                                text = "No active target nodes configured.",
+                                fontSize = 12.sp,
+                                color = Color.Gray
+                            )
+                        } else {
+                            activeNodes.forEach { node ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(text = node.name, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                    val checks = mutableListOf<String>()
+                                    if (node.requireInternet) checks.add("Net")
+                                    if (node.requireVpn) checks.add("VPN")
+                                    if (node.requireHealthcheck) checks.add("Health")
+                                    StatusPill(
+                                        label = if (checks.isEmpty()) "No Checks" else checks.joinToString(", "),
+                                        isActive = checks.isNotEmpty()
                                     )
                                 }
                             }
@@ -195,7 +215,7 @@ fun DashboardScreen(
                             onClick = onNavigateToSettings,
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Text("Configure Settings & Permissions")
+                            Text("Configure Target Nodes & Pre-Checks")
                         }
                     }
                 }
@@ -219,7 +239,7 @@ fun DashboardScreen(
                             modifier = Modifier.align(Alignment.Start)
                         )
                         Text(
-                            text = "Send a test ping message to verify delivery to your configured target server.",
+                            text = "Send a test ping message to verify delivery to your configured target servers.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.align(Alignment.Start)
@@ -227,7 +247,7 @@ fun DashboardScreen(
 
                         Button(
                             onClick = { viewModel.sendTestMessage() },
-                            enabled = !uiState.isSendingTest && uiState.serverUrl.isNotBlank(),
+                            enabled = !uiState.isSendingTest && uiState.activeNodes.isNotEmpty(),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             if (uiState.isSendingTest) {
@@ -352,6 +372,26 @@ fun DashboardScreen(
                 }
             )
         }
+    }
+}
+
+@Composable
+fun StatusPill(
+    label: String,
+    isActive: Boolean
+) {
+    val (bg, fg) = if (isActive) AppStatusColors.successColors() else MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = Modifier
+            .background(bg, shape = RoundedCornerShape(12.dp))
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    ) {
+        Text(
+            text = label,
+            color = fg,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }
 

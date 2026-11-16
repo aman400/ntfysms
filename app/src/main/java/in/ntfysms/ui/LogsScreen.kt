@@ -93,36 +93,10 @@ fun LogsScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Message Logs & Queue",
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                actions = {
-                    if (allEvents.isNotEmpty()) {
-                        TextButton(onClick = { showClearDialog = true }) {
-                            Text(
-                                text = "Clear All",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            )
-        }
-    ) { innerPadding ->
+    Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -305,12 +279,32 @@ fun LogEventCardItem(
                 }
             }
 
-            event.errorMessage?.let { err ->
-                Text(
-                    text = "Error: $err",
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.error
-                )
+            event.errorMessage?.let { note ->
+                val isPreConditionWaiting = event.status == MessageStatus.QUEUED || note.startsWith("⏳")
+                val noteBg = if (isPreConditionWaiting) Color(0xFFFEF3C7) else MaterialTheme.colorScheme.errorContainer
+                val noteFg = if (isPreConditionWaiting) Color(0xFF92400E) else MaterialTheme.colorScheme.onErrorContainer
+                val noteTitle = if (isPreConditionWaiting) "⏳ Waiting on Pre-Condition:" else "⚠️ Delivery Error:"
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(noteBg, RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = noteTitle,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = noteFg
+                        )
+                        Text(
+                            text = note,
+                            fontSize = 12.sp,
+                            color = noteFg
+                        )
+                    }
+                }
             }
 
             Row(

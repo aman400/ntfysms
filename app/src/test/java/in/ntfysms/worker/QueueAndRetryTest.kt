@@ -1,11 +1,14 @@
 package `in`.ntfysms.worker
 
 import `in`.ntfysms.data.AppSettings
+import `in`.ntfysms.data.DeliveryNode
 import `in`.ntfysms.data.MessageDao
 import `in`.ntfysms.data.MessageEntity
 import `in`.ntfysms.data.MessageStatus
 import `in`.ntfysms.data.SettingsRepository
 import `in`.ntfysms.network.NtfyClient
+import `in`.ntfysms.network.PreCheckManager
+import `in`.ntfysms.network.PreCheckResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -90,11 +93,35 @@ class FakeNtfyClient(
 }
 
 class FakeSettingsRepository(private val settings: AppSettings) : SettingsRepository {
-    constructor() : this(AppSettings(isEnabled = true, serverUrl = "https://ntfy.sh", topic = "otp", expiryMinutes = 10))
+    constructor() : this(
+        AppSettings(
+            isEnabled = true,
+            nodes = listOf(
+                DeliveryNode(
+                    id = "test-node-1",
+                    name = "Test Node",
+                    serverType = "NTFY",
+                    serverUrl = "https://ntfy.sh",
+                    topic = "otp",
+                    isEnabled = true
+                )
+            ),
+            expiryMinutes = 10
+        )
+    )
 
     override fun getSettings(): AppSettings = settings
     override fun saveSettings(settings: AppSettings) {}
     override fun setEnabled(enabled: Boolean) {}
+}
+
+class FakePreCheckManager(
+    var shouldPass: Boolean = false,
+    var failReason: String = "VPN connection missing"
+) : PreCheckManager(context = null) {
+    override suspend fun verifyNodePreChecks(node: DeliveryNode): PreCheckResult {
+        return if (shouldPass) PreCheckResult.Passed else PreCheckResult.Failed(failReason)
+    }
 }
 
 class QueueAndRetryTest {
@@ -197,6 +224,88 @@ class QueueAndRetryTest {
         assertTrue(result.isSuccess)
         val updated = messageDao.getMessageById("msg-fail")
         assertEquals(MessageStatus.DELIVERED, updated?.status)
+    }
+
+    @Test
+    fun testPreCheckWaitingThrottlesMessageInQueuedState() = runTest {
+        val fakeClient = FakeNtfyClient(failCount = 0)
+        val fakePreCheck = FakePreCheckManager(shouldPass = false, failReason = "Tailscale VPN required")
+        val manager = ForwardingManager(
+            messageDao = messageDao,
+            settingsRepository = settingsRepo,
+            ntfyClient = fakeClient,
+            preCheckManager = fakePreCheck,
+            delayProvider = {}
+        )
+
+        val entity = manager.enqueueIncomingSms(sender = "HDFCBK", body = "Your OTP is 123456")
+
+        val updated = messageDao.getMessageById(entity.id)
+        assertTrue(updated != null)
+        assertEquals(MessageStatus.QUEUED, updated?.status)
+        assertEquals(0, updated?.retryCount) // Retry count NOT incremented during throttling
+        assertTrue(updated?.errorMessage?.contains("⏳ Waiting for Pre-Conditions") == true)
+        assertTrue(updated?.errorMessage?.contains("Tailscale VPN required") == true)
+        assertEquals(0, fakeClient.callCount) // HTTP client not called while throttled
+    }
+
+    @Test
+    fun testAutoExecuteWhenPreConditionIsMet() = runTest {
+        val fakeClient = FakeNtfyClient(failCount = 0)
+        val fakePreCheck = FakePreCheckManager(shouldPass = false, failReason = "Tailscale VPN required")
+        val manager = ForwardingManager(
+            messageDao = messageDao,
+            settingsRepository = settingsRepo,
+            ntfyClient = fakeClient,
+            preCheckManager = fakePreCheck,
+            delayProvider = {}
+        )
+
+        // Enqueue while VPN is disconnected
+        val entity = manager.enqueueIncomingSms(sender = "HDFCBK", body = "Your OTP is 123456")
+        assertEquals(MessageStatus.QUEUED, messageDao.getMessageById(entity.id)?.status)
+        assertEquals(0, fakeClient.callCount)
+
+        // VPN connects! Pre-checks now pass
+        fakePreCheck.shouldPass = true
+        manager.processPendingQueue()
+
+        val updated = messageDao.getMessageById(entity.id)
+        assertEquals(MessageStatus.DELIVERED, updated?.status)
+        assertNull(updated?.body) // OTP text deleted immediately on delivery
+        assertEquals(1, fakeClient.callCount) // Automatically delivered!
+    }
+
+    @Test
+    fun testManualRetryResetsExpiryAndDelivers() = runTest {
+        val fakeClient = FakeNtfyClient(failCount = 0)
+        val fakePreCheck = FakePreCheckManager(shouldPass = true)
+        val manager = ForwardingManager(
+            messageDao = messageDao,
+            settingsRepository = settingsRepo,
+            ntfyClient = fakeClient,
+            preCheckManager = fakePreCheck,
+            delayProvider = {}
+        )
+
+        val oldTime = System.currentTimeMillis() - (20 * 60 * 1000L)
+        val expiredMsg = MessageEntity(
+            id = "msg-exp",
+            sender = "AXISBK",
+            body = "OTP 555444",
+            receivedAt = oldTime,
+            status = MessageStatus.EXPIRED,
+            errorMessage = "Expired after 10 minutes"
+        )
+        messageDao.insertMessage(expiredMsg)
+
+        val result = manager.retryMessage("msg-exp")
+        assertTrue(result.isSuccess)
+
+        val updated = messageDao.getMessageById("msg-exp")
+        assertEquals(MessageStatus.DELIVERED, updated?.status)
+        assertNull(updated?.body)
+        assertEquals(1, fakeClient.callCount)
     }
 
     @Test

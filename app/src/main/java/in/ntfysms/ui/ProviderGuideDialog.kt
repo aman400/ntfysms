@@ -12,13 +12,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -28,44 +37,94 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import `in`.ntfysms.data.ServerType
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProviderGuideDialog(
-    serverType: String,
+fun ProviderGuideBottomSheet(
+    initialServerType: String = ServerType.NTFY,
     onDismiss: () -> Unit
 ) {
-    val isGotify = serverType == ServerType.GOTIFY
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var selectedType by remember { mutableStateOf(initialServerType) }
+    val isGotify = selectedType == ServerType.GOTIFY
 
-    AlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = if (isGotify) "🔔 How to Setup Gotify" else "🚀 How to Setup ntfy",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp
-                )
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+        sheetState = sheetState,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (isGotify) {
-                    GotifySetupGuideContent()
-                } else {
-                    NtfySetupGuideContent()
+                Column {
+                    Text(
+                        text = "📖 Delivery Provider Setup Guide",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                    Text(
+                        text = "Step-by-step instructions for ntfy & Gotify",
+                        fontSize = 12.sp,
+                        color = Color.Gray
+                    )
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Close", color = Color.Gray)
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Got It!")
+
+            // Segmented Provider Selector
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (!isGotify) {
+                    Button(onClick = { selectedType = ServerType.NTFY }, modifier = Modifier.weight(1f)) {
+                        Text("🚀 ntfy Setup", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    OutlinedButton(onClick = { selectedType = ServerType.GOTIFY }, modifier = Modifier.weight(1f)) {
+                        Text("🔔 Gotify Setup", fontSize = 12.sp)
+                    }
+                } else {
+                    OutlinedButton(onClick = { selectedType = ServerType.NTFY }, modifier = Modifier.weight(1f)) {
+                        Text("🚀 ntfy Setup", fontSize = 12.sp)
+                    }
+                    Button(onClick = { selectedType = ServerType.GOTIFY }, modifier = Modifier.weight(1f)) {
+                        Text("🔔 Gotify Setup", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
+
+            // Guide Body Content
+            if (isGotify) {
+                GotifySetupGuideContent()
+            } else {
+                NtfySetupGuideContent()
+            }
+
+            // Sticky Bottom Action Button
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp)
+            ) {
+                Text("Got It!", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
-    )
+    }
 }
 
 @Composable

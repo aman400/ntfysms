@@ -7,9 +7,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import `in`.ntfysms.data.AppDatabase
 import `in`.ntfysms.data.AppSettings
+import `in`.ntfysms.data.DeliveryNode
 import `in`.ntfysms.data.EncryptedSettingsRepository
 import `in`.ntfysms.data.MessageEntity
-import `in`.ntfysms.data.ServerType
 import `in`.ntfysms.filter.SmsFilter
 import `in`.ntfysms.network.UrlValidator
 import `in`.ntfysms.service.SmsForwarderService
@@ -22,15 +22,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class MainUiState(
-    val serverType: String = ServerType.NTFY,
-    val serverUrl: String = "",
-    val topic: String = "",
-    val token: String = "",
-    val ntfyServerUrl: String = "",
-    val ntfyTopic: String = "",
-    val ntfyToken: String = "",
-    val gotifyServerUrl: String = "",
-    val gotifyToken: String = "",
+    val nodes: List<DeliveryNode> = emptyList(),
     val allowlist: String = ".*",
     val keywordRegex: String = ".*",
     val senderRegex: String = ".*",
@@ -42,9 +34,6 @@ data class MainUiState(
     val forwardNotifications: Boolean = false,
     val autoClearEnabled: Boolean = false,
     val autoClearMinutes: String = "1440",
-    val requireInternet: Boolean = true,
-    val requireVpn: Boolean = false,
-    val requireHealthcheck: Boolean = false,
     val isRegexValid: Boolean = true,
     val isUrlValid: Boolean = true,
     val isSendingTest: Boolean = false,
@@ -53,22 +42,8 @@ data class MainUiState(
     val isBatteryOptimized: Boolean = true,
     val hasNotificationListenerPermission: Boolean = false
 ) {
-    val activeServerUrl: String
-        get() = if (serverType == ServerType.GOTIFY) {
-            gotifyServerUrl.ifBlank { serverUrl }
-        } else {
-            ntfyServerUrl.ifBlank { serverUrl }
-        }
-
-    val activeTopic: String
-        get() = if (serverType == ServerType.GOTIFY) "" else ntfyTopic.ifBlank { topic }
-
-    val activeToken: String
-        get() = if (serverType == ServerType.GOTIFY) {
-            gotifyToken.ifBlank { token }
-        } else {
-            ntfyToken.ifBlank { token }
-        }
+    val activeNodes: List<DeliveryNode>
+        get() = nodes.filter { it.isEnabled && it.serverUrl.isNotBlank() }
 }
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -103,17 +78,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadSettings() {
         val s = settingsRepo.getSettings()
-        val activeUrl = s.activeServerUrl
         _uiState.value = _uiState.value.copy(
-            serverType = s.serverType,
-            serverUrl = s.serverUrl,
-            topic = s.topic,
-            token = s.token,
-            ntfyServerUrl = s.ntfyServerUrl.ifBlank { if (s.serverType == ServerType.NTFY) s.serverUrl else "" },
-            ntfyTopic = s.ntfyTopic.ifBlank { if (s.serverType == ServerType.NTFY) s.topic else "" },
-            ntfyToken = s.ntfyToken.ifBlank { if (s.serverType == ServerType.NTFY) s.token else "" },
-            gotifyServerUrl = s.gotifyServerUrl.ifBlank { if (s.serverType == ServerType.GOTIFY) s.serverUrl else "" },
-            gotifyToken = s.gotifyToken.ifBlank { if (s.serverType == ServerType.GOTIFY) s.token else "" },
+            nodes = s.nodes,
             allowlist = s.allowlist,
             keywordRegex = s.keywordRegex,
             senderRegex = s.senderRegex,
@@ -125,66 +91,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             forwardNotifications = s.forwardNotifications,
             autoClearEnabled = s.autoClearEnabled,
             autoClearMinutes = s.autoClearMinutes.toString(),
-            requireInternet = s.requireInternet,
-            requireVpn = s.requireVpn,
-            requireHealthcheck = s.requireHealthcheck,
             isRegexValid = SmsFilter.isValidRegex(s.keywordRegex),
-            isUrlValid = activeUrl.isEmpty() || UrlValidator.isValidUrl(activeUrl, s.allowInsecureHttp),
+            isUrlValid = true,
             isBatteryOptimized = checkBatteryOptimizedInternal(),
             hasNotificationListenerPermission = checkNotificationListenerPermissionInternal()
         )
     }
 
-    fun updateServerType(type: String) {
-        _uiState.value = _uiState.value.copy(serverType = type)
+    fun addNode(node: DeliveryNode) {
+        val updated = _uiState.value.nodes + node
+        _uiState.value = _uiState.value.copy(nodes = updated)
         saveCurrentSettings()
     }
 
-    fun updateNtfyServerUrl(url: String) {
-        val isValid = url.isEmpty() || UrlValidator.isValidUrl(url, _uiState.value.allowInsecureHttp)
-        _uiState.value = _uiState.value.copy(
-            ntfyServerUrl = url,
-            isUrlValid = if (_uiState.value.serverType == ServerType.NTFY) isValid else _uiState.value.isUrlValid
-        )
+    fun updateNode(node: DeliveryNode) {
+        val updated = _uiState.value.nodes.map { if (it.id == node.id) node else it }
+        _uiState.value = _uiState.value.copy(nodes = updated)
         saveCurrentSettings()
     }
 
-    fun updateNtfyTopic(topic: String) {
-        _uiState.value = _uiState.value.copy(ntfyTopic = topic)
+    fun deleteNode(nodeId: String) {
+        val updated = _uiState.value.nodes.filterNot { it.id == nodeId }
+        _uiState.value = _uiState.value.copy(nodes = updated)
         saveCurrentSettings()
     }
 
-    fun updateNtfyToken(token: String) {
-        _uiState.value = _uiState.value.copy(ntfyToken = token)
-        saveCurrentSettings()
-    }
-
-    fun updateGotifyServerUrl(url: String) {
-        val isValid = url.isEmpty() || UrlValidator.isValidUrl(url, _uiState.value.allowInsecureHttp)
-        _uiState.value = _uiState.value.copy(
-            gotifyServerUrl = url,
-            isUrlValid = if (_uiState.value.serverType == ServerType.GOTIFY) isValid else _uiState.value.isUrlValid
-        )
-        saveCurrentSettings()
-    }
-
-    fun updateGotifyToken(token: String) {
-        _uiState.value = _uiState.value.copy(gotifyToken = token)
-        saveCurrentSettings()
-    }
-
-    fun toggleRequireInternet(require: Boolean) {
-        _uiState.value = _uiState.value.copy(requireInternet = require)
-        saveCurrentSettings()
-    }
-
-    fun toggleRequireVpn(require: Boolean) {
-        _uiState.value = _uiState.value.copy(requireVpn = require)
-        saveCurrentSettings()
-    }
-
-    fun toggleRequireHealthcheck(require: Boolean) {
-        _uiState.value = _uiState.value.copy(requireHealthcheck = require)
+    fun toggleNode(nodeId: String, enabled: Boolean) {
+        val updated = _uiState.value.nodes.map { if (it.id == nodeId) it.copy(isEnabled = enabled) else it }
+        _uiState.value = _uiState.value.copy(nodes = updated)
         saveCurrentSettings()
     }
 
@@ -235,11 +169,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleAllowInsecureHttp(allow: Boolean) {
-        val activeUrl = _uiState.value.activeServerUrl
-        _uiState.value = _uiState.value.copy(
-            allowInsecureHttp = allow,
-            isUrlValid = activeUrl.isEmpty() || UrlValidator.isValidUrl(activeUrl, allow)
-        )
+        _uiState.value = _uiState.value.copy(allowInsecureHttp = allow)
         saveCurrentSettings()
     }
 
@@ -268,7 +198,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val result = forwardingManager.sendTestMessage()
             _uiState.value = _uiState.value.copy(
                 isSendingTest = false,
-                testResultMessage = if (result.isSuccess) "Test message sent successfully!" else "Failed: ${result.exceptionOrNull()?.message}"
+                testResultMessage = if (result.isSuccess) "Test ping sent to active delivery nodes!" else "Failed: ${result.exceptionOrNull()?.message}"
             )
         }
     }
@@ -315,15 +245,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun saveCurrentSettings() {
         val current = _uiState.value
         val settings = AppSettings(
-            serverType = current.serverType,
-            serverUrl = current.activeServerUrl,
-            topic = current.activeTopic,
-            token = current.activeToken,
-            ntfyServerUrl = current.ntfyServerUrl,
-            ntfyTopic = current.ntfyTopic,
-            ntfyToken = current.ntfyToken,
-            gotifyServerUrl = current.gotifyServerUrl,
-            gotifyToken = current.gotifyToken,
+            nodes = current.nodes,
             allowlist = current.allowlist,
             keywordRegex = current.keywordRegex,
             senderRegex = current.senderRegex,
@@ -335,10 +257,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             allowInsecureHttp = current.allowInsecureHttp,
             forwardNotifications = current.forwardNotifications,
             autoClearEnabled = current.autoClearEnabled,
-            autoClearMinutes = current.autoClearMinutes.toIntOrNull() ?: 1440,
-            requireInternet = current.requireInternet,
-            requireVpn = current.requireVpn,
-            requireHealthcheck = current.requireHealthcheck
+            autoClearMinutes = current.autoClearMinutes.toIntOrNull() ?: 1440
         )
         settingsRepo.saveSettings(settings)
     }

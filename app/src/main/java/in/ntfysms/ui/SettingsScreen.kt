@@ -1,6 +1,5 @@
 package `in`.ntfysms.ui
 
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -9,28 +8,33 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,6 +52,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import `in`.ntfysms.data.DeliveryNode
 import `in`.ntfysms.data.ServerType
 import `in`.ntfysms.filter.MessageTemplateParser
 
@@ -65,6 +70,8 @@ fun SettingsScreen(
 
     var showToken by remember { mutableStateOf(false) }
     var showGuideDialog by remember { mutableStateOf(false) }
+    var editingNode by remember { mutableStateOf<DeliveryNode?>(null) }
+    var showAddNodeDialog by remember { mutableStateOf(false) }
 
     // Live preview states
     var sampleSender by remember { mutableStateOf("VM-HDFCBK") }
@@ -79,25 +86,10 @@ fun SettingsScreen(
         )
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Settings & Permissions",
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            )
-        }
-    ) { innerPadding ->
+    Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
@@ -176,189 +168,81 @@ fun SettingsScreen(
                 }
             }
 
-            // Target Delivery Service Selector Card
+            // Delivery Nodes Management Card (Node-Level Pre-Checks & Credentials)
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Active Delivery Service Provider",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            TextButton(onClick = { showGuideDialog = true }) {
-                                Text("📖 Setup Guide", fontSize = 12.sp)
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Delivery Target Nodes",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Target destination servers (ntfy / Gotify)",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontSize = 11.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                            Button(
+                                onClick = { showAddNodeDialog = true },
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+                            ) {
+                                Text("+ Add Node", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                             }
                         }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            listOf(
-                                ServerType.NTFY to "🚀 ntfy",
-                                ServerType.GOTIFY to "🔔 Gotify"
-                            ).forEach { (type, label) ->
-                                val isSelected = uiState.serverType == type
-                                if (isSelected) {
+                        val activeNodes = uiState.activeNodes
+                        if (activeNodes.isEmpty()) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(14.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "📍 No Delivery Nodes Configured",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                    Text(
+                                        text = "Add target nodes for ntfy or Gotify servers with VPN/healthcheck rules.",
+                                        fontSize = 11.sp,
+                                        color = Color.Gray
+                                    )
                                     Button(
-                                        onClick = { viewModel.updateServerType(type) },
-                                        modifier = Modifier.weight(1f)
+                                        onClick = { showAddNodeDialog = true },
+                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                                     ) {
-                                        Text(label, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                } else {
-                                    OutlinedButton(
-                                        onClick = { viewModel.updateServerType(type) },
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text(label, fontSize = 13.sp)
+                                        Text("+ Add Your First Delivery Node", fontSize = 12.sp)
                                     }
                                 }
                             }
-                        }
-
-                        // Dedicated ntfy Settings Inputs Card
-                        if (uiState.serverType == ServerType.NTFY) {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "🚀 ntfy Destination Credentials",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 14.sp,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                        TextButton(onClick = { showGuideDialog = true }) {
-                                            Text("How to setup?", fontSize = 11.sp)
-                                        }
-                                    }
-
-                                    OutlinedTextField(
-                                        value = uiState.ntfyServerUrl,
-                                        onValueChange = { viewModel.updateNtfyServerUrl(it) },
-                                        label = { Text("ntfy Server URL") },
-                                        placeholder = { Text("https://ntfy.sh") },
-                                        isError = !uiState.isUrlValid,
-                                        supportingText = {
-                                            if (!uiState.isUrlValid) {
-                                                Text("Must be HTTPS (or localhost / private IP with opt-in enabled)", color = MaterialTheme.colorScheme.error)
-                                            } else {
-                                                Text("e.g. https://ntfy.sh or self-hosted server")
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        singleLine = true
-                                    )
-
-                                    OutlinedTextField(
-                                        value = uiState.ntfyTopic,
-                                        onValueChange = { viewModel.updateNtfyTopic(it) },
-                                        label = { Text("ntfy Topic Name") },
-                                        placeholder = { Text("my-secret-otp-topic") },
-                                        supportingText = { Text("Required topic target path") },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        singleLine = true
-                                    )
-
-                                    OutlinedTextField(
-                                        value = uiState.ntfyToken,
-                                        onValueChange = { viewModel.updateNtfyToken(it) },
-                                        label = { Text("ntfy Access Token (Optional)") },
-                                        placeholder = { Text("tk_1a2b3c4d...") },
-                                        supportingText = { Text("Optional Bearer token for protected ntfy topics") },
-                                        visualTransformation = if (showToken) VisualTransformation.None else PasswordVisualTransformation(),
-                                        trailingIcon = {
-                                            TextButton(onClick = { showToken = !showToken }) {
-                                                Text(if (showToken) "Hide" else "Show")
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        singleLine = true
-                                    )
-                                }
-                            }
-                        }
-
-                        // Dedicated Gotify Settings Inputs Card
-                        if (uiState.serverType == ServerType.GOTIFY) {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                            ) {
-                                Column(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "🔔 Gotify Destination Credentials",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 14.sp,
-                                            color = Color(0xFF0284C7)
-                                        )
-                                        TextButton(onClick = { showGuideDialog = true }) {
-                                            Text("How to setup?", fontSize = 11.sp)
-                                        }
-                                    }
-
-                                    OutlinedTextField(
-                                        value = uiState.gotifyServerUrl,
-                                        onValueChange = { viewModel.updateGotifyServerUrl(it) },
-                                        label = { Text("Gotify Server URL") },
-                                        placeholder = { Text("https://gotify.example.com") },
-                                        isError = !uiState.isUrlValid,
-                                        supportingText = {
-                                            if (!uiState.isUrlValid) {
-                                                Text("Must be HTTPS (or localhost / private IP with opt-in enabled)", color = MaterialTheme.colorScheme.error)
-                                            } else {
-                                                Text("e.g. https://gotify.example.com")
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        singleLine = true
-                                    )
-
-                                    OutlinedTextField(
-                                        value = uiState.gotifyToken,
-                                        onValueChange = { viewModel.updateGotifyToken(it) },
-                                        label = { Text("Gotify App Token (X-Gotify-Key)") },
-                                        placeholder = { Text("A1b2C3d4E5f6g7") },
-                                        supportingText = { Text("Application token generated in Gotify web UI") },
-                                        visualTransformation = if (showToken) VisualTransformation.None else PasswordVisualTransformation(),
-                                        trailingIcon = {
-                                            TextButton(onClick = { showToken = !showToken }) {
-                                                Text(if (showToken) "Hide" else "Show")
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        singleLine = true
-                                    )
-                                }
+                        } else {
+                            activeNodes.forEach { node ->
+                                DeliveryNodeItemRow(
+                                    node = node,
+                                    onToggle = { enabled -> viewModel.toggleNode(node.id, enabled) },
+                                    onEdit = { editingNode = node },
+                                    onDelete = { viewModel.deleteNode(node.id) }
+                                )
                             }
                         }
 
@@ -685,12 +569,479 @@ fun SettingsScreen(
             item { Spacer(modifier = Modifier.height(36.dp)) }
         }
 
-        // Setup Guide Dialog
+        // Add / Edit Delivery Node Bottom Sheet
+        if (showAddNodeDialog || editingNode != null) {
+            val target = editingNode ?: DeliveryNode()
+            AddEditNodeBottomSheet(
+                initialNode = target,
+                onDismiss = {
+                    showAddNodeDialog = false
+                    editingNode = null
+                },
+                onSave = { node ->
+                    if (editingNode != null) {
+                        viewModel.updateNode(node)
+                    } else {
+                        viewModel.addNode(node)
+                    }
+                    showAddNodeDialog = false
+                    editingNode = null
+                }
+            )
+        }
+
+        // Setup Guide Bottom Sheet
         if (showGuideDialog) {
-            ProviderGuideDialog(
-                serverType = uiState.serverType,
+            ProviderGuideBottomSheet(
                 onDismiss = { showGuideDialog = false }
             )
+        }
+    }
+}
+
+@Composable
+fun DeliveryNodeItemRow(
+    node: DeliveryNode,
+    onToggle: (Boolean) -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val (icon, typeColor) = if (node.serverType == ServerType.GOTIFY) "🔔" to Color(0xFF0284C7) else "🚀" to Color(0xFF16A34A)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(text = "$icon ", fontSize = 14.sp)
+                    Text(text = node.name, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(
+                        modifier = Modifier
+                            .background(typeColor, shape = RoundedCornerShape(4.dp))
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    ) {
+                        Text(text = node.serverType, color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Switch(
+                    checked = node.isEnabled,
+                    onCheckedChange = onToggle,
+                    modifier = Modifier.height(28.dp)
+                )
+            }
+
+            Text(
+                text = node.serverUrl.ifBlank { "No URL configured" },
+                fontFamily = FontFamily.Monospace,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            // Pre-Checks Badges & Actions Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    if (node.requireInternet) {
+                        Box(
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(10.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "🌐 Net",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+
+                    if (node.requireVpn) {
+                        Box(
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(10.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "🔒 VPN",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
+
+                    if (node.requireHealthcheck) {
+                        Box(
+                            modifier = Modifier
+                                .background(Color(0xFFDCFCE7), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "🩺 Health (${node.healthcheckMethod})",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF15803D)
+                            )
+                        }
+                    }
+
+                    if (!node.requireInternet && !node.requireVpn && !node.requireHealthcheck) {
+                        Text(text = "No pre-checks", fontSize = 10.sp, color = Color.Gray)
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(
+                        onClick = onEdit,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Text("Edit", fontSize = 11.sp)
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    TextButton(
+                        onClick = onDelete,
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                        modifier = Modifier.height(28.dp)
+                    ) {
+                        Text("Del", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AddEditNodeBottomSheet(
+    initialNode: DeliveryNode,
+    onDismiss: () -> Unit,
+    onSave: (DeliveryNode) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    var name by remember { mutableStateOf(initialNode.name) }
+    var serverType by remember { mutableStateOf(initialNode.serverType) }
+    var serverUrl by remember { mutableStateOf(initialNode.serverUrl) }
+    var topic by remember { mutableStateOf(initialNode.topic) }
+    var token by remember { mutableStateOf(initialNode.token) }
+    var showToken by remember { mutableStateOf(false) }
+
+    // Node-level pre-checks
+    var requireInternet by remember { mutableStateOf(initialNode.requireInternet) }
+    var requireVpn by remember { mutableStateOf(initialNode.requireVpn) }
+    var requireHealthcheck by remember { mutableStateOf(initialNode.requireHealthcheck) }
+    var customHealthcheckUrl by remember { mutableStateOf(initialNode.customHealthcheckUrl) }
+    var healthcheckMethod by remember { mutableStateOf(initialNode.healthcheckMethod) }
+    var healthcheckHeaders by remember { mutableStateOf(initialNode.healthcheckHeaders) }
+    var healthcheckExpectedStatus by remember { mutableStateOf(initialNode.healthcheckExpectedStatus.toString()) }
+
+    val isEditMode = initialNode.id.isNotBlank() && initialNode.id != "default-node"
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = if (isEditMode) "Edit Target Delivery Node" else "Add Target Delivery Node",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                    Text(
+                        text = "Configure destination credentials & healthcheck rules",
+                        fontSize = 12.sp,
+                        color = Color.Gray
+                    )
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            }
+
+            // Section 1: Target Destination Credentials
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "1. Destination Credentials",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Node Display Name") },
+                        placeholder = { Text("e.g. Tailscale ntfy Server") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    Text(
+                        text = "Target Service Provider",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.Gray
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            ServerType.NTFY to "🚀 ntfy",
+                            ServerType.GOTIFY to "🔔 Gotify"
+                        ).forEach { (type, label) ->
+                            if (serverType == type) {
+                                Button(onClick = { serverType = type }, modifier = Modifier.weight(1f)) {
+                                    Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                }
+                            } else {
+                                OutlinedButton(onClick = { serverType = type }, modifier = Modifier.weight(1f)) {
+                                    Text(label, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = serverUrl,
+                        onValueChange = { serverUrl = it },
+                        label = { Text("Server URL") },
+                        placeholder = { Text(if (serverType == ServerType.GOTIFY) "https://gotify.example.com" else "https://ntfy.sh") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+
+                    if (serverType == ServerType.NTFY) {
+                        OutlinedTextField(
+                            value = topic,
+                            onValueChange = { topic = it },
+                            label = { Text("ntfy Topic Name") },
+                            placeholder = { Text("my-private-otp-topic") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = token,
+                        onValueChange = { token = it },
+                        label = { Text(if (serverType == ServerType.GOTIFY) "App Token (X-Gotify-Key)" else "Access Token (Optional)") },
+                        placeholder = { Text(if (serverType == ServerType.GOTIFY) "A1b2C3d4..." else "tk_1a2b3c...") },
+                        visualTransformation = if (showToken) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            TextButton(onClick = { showToken = !showToken }) {
+                                Text(if (showToken) "Hide" else "Show", fontSize = 11.sp)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            }
+
+            // Section 2: Node-Level Pre-Checks
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "2. Pre-Checks & Throttling Rules",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = "🌐 Require Internet Connection", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text(text = "Verifies network connectivity before delivery", fontSize = 10.sp, color = Color.Gray)
+                        }
+                        Switch(checked = requireInternet, onCheckedChange = { requireInternet = it })
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = "🔒 Require Active VPN", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text(text = "Throttles node if VPN is disconnected", fontSize = 10.sp, color = Color.Gray)
+                        }
+                        Switch(checked = requireVpn, onCheckedChange = { requireVpn = it })
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = "🩺 Require Server Healthcheck Ping", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text(text = "Pings server before attempting payload delivery", fontSize = 10.sp, color = Color.Gray)
+                        }
+                        Switch(checked = requireHealthcheck, onCheckedChange = { requireHealthcheck = it })
+                    }
+                }
+            }
+
+            // Section 3: Custom Healthcheck Request Settings
+            if (requireHealthcheck) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "3. Custom HTTP Healthcheck Request",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        Text(
+                            text = "HTTP Method",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.Gray
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            listOf("GET", "HEAD", "POST").forEach { m ->
+                                if (healthcheckMethod.equals(m, ignoreCase = true)) {
+                                    Button(onClick = { healthcheckMethod = m }, modifier = Modifier.weight(1f)) {
+                                        Text(m, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                } else {
+                                    OutlinedButton(onClick = { healthcheckMethod = m }, modifier = Modifier.weight(1f)) {
+                                        Text(m, fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+
+                        OutlinedTextField(
+                            value = customHealthcheckUrl,
+                            onValueChange = { customHealthcheckUrl = it },
+                            label = { Text("Custom Healthcheck URL") },
+                            placeholder = { Text("https://my-server.com/health") },
+                            supportingText = { Text("Defaults to main server URL if left blank") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = healthcheckExpectedStatus,
+                            onValueChange = { healthcheckExpectedStatus = it },
+                            label = { Text("Expected HTTP Status Code") },
+                            placeholder = { Text("200") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+
+                        OutlinedTextField(
+                            value = healthcheckHeaders,
+                            onValueChange = { healthcheckHeaders = it },
+                            label = { Text("Custom HTTP Headers") },
+                            placeholder = { Text("X-Health-Key: secret123\nAuthorization: Bearer token") },
+                            supportingText = { Text("Separate multiple headers with newlines (Key: Value)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+
+            // Save Action Button
+            Button(
+                onClick = {
+                    if (serverUrl.isNotBlank()) {
+                        onSave(
+                            initialNode.copy(
+                                name = if (name.isNotBlank()) name else (if (serverType == ServerType.GOTIFY) "Gotify Target Node" else "ntfy Target Node"),
+                                serverType = serverType,
+                                serverUrl = serverUrl.trim(),
+                                topic = topic.trim(),
+                                token = token.trim(),
+                                requireInternet = requireInternet,
+                                requireVpn = requireVpn,
+                                requireHealthcheck = requireHealthcheck,
+                                customHealthcheckUrl = customHealthcheckUrl.trim(),
+                                healthcheckMethod = healthcheckMethod,
+                                healthcheckHeaders = healthcheckHeaders,
+                                healthcheckExpectedStatus = healthcheckExpectedStatus.toIntOrNull() ?: 200
+                            )
+                        )
+                    }
+                },
+                enabled = serverUrl.isNotBlank(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp)
+            ) {
+                Text(
+                    text = if (isEditMode) "Save Changes" else "Add Delivery Node",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }

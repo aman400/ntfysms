@@ -11,15 +11,7 @@ object ServerType {
 }
 
 data class AppSettings(
-    val serverType: String = ServerType.NTFY,
-    val serverUrl: String = "",
-    val topic: String = "",
-    val token: String = "",
-    val ntfyServerUrl: String = "",
-    val ntfyTopic: String = "",
-    val ntfyToken: String = "",
-    val gotifyServerUrl: String = "",
-    val gotifyToken: String = "",
+    val nodes: List<DeliveryNode> = emptyList(),
     val allowlist: String = ".*",
     val keywordRegex: String = ".*",
     val senderRegex: String = ".*",
@@ -31,30 +23,13 @@ data class AppSettings(
     val allowInsecureHttp: Boolean = false,
     val forwardNotifications: Boolean = false,
     val autoClearEnabled: Boolean = false,
-    val autoClearMinutes: Int = 1440,
-    val requireInternet: Boolean = true,
-    val requireVpn: Boolean = false,
-    val requireHealthcheck: Boolean = false
+    val autoClearMinutes: Int = 1440
 ) {
     val allowlistItems: List<String>
         get() = allowlist.split(",", "\n").map { it.trim() }.filter { it.isNotEmpty() }
 
-    val activeServerUrl: String
-        get() = if (serverType == ServerType.GOTIFY) {
-            gotifyServerUrl.ifBlank { serverUrl }
-        } else {
-            ntfyServerUrl.ifBlank { serverUrl }
-        }
-
-    val activeTopic: String
-        get() = if (serverType == ServerType.GOTIFY) "" else ntfyTopic.ifBlank { topic }
-
-    val activeToken: String
-        get() = if (serverType == ServerType.GOTIFY) {
-            gotifyToken.ifBlank { token }
-        } else {
-            ntfyToken.ifBlank { token }
-        }
+    val activeNodes: List<DeliveryNode>
+        get() = nodes.filter { it.isEnabled && it.serverUrl.isNotBlank() }
 }
 
 interface SettingsRepository {
@@ -81,34 +56,42 @@ class EncryptedSettingsRepository(context: Context) : SettingsRepository {
                 EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
             )
         } catch (e: Exception) {
-            // Fallback to standard SharedPreferences if Keystore issue occurs on legacy device
             context.getSharedPreferences(PREFS_FILE_NAME, Context.MODE_PRIVATE)
         }
     }
 
     override fun getSettings(): AppSettings {
-        val serverType = prefs.getString(KEY_SERVER_TYPE, ServerType.NTFY) ?: ServerType.NTFY
-        val legacyUrl = prefs.getString(KEY_SERVER_URL, "") ?: ""
-        val legacyTopic = prefs.getString(KEY_TOPIC, "") ?: ""
-        val legacyToken = prefs.getString(KEY_TOKEN, "") ?: ""
+        val rawNodes = prefs.getString(KEY_DELIVERY_NODES, "") ?: ""
+        var nodes = deserializeNodes(rawNodes)
 
-        val ntfyUrl = prefs.getString(KEY_NTFY_SERVER_URL, "") ?: if (serverType == ServerType.NTFY) legacyUrl else ""
-        val ntfyTop = prefs.getString(KEY_NTFY_TOPIC, "") ?: if (serverType == ServerType.NTFY) legacyTopic else ""
-        val ntfyTok = prefs.getString(KEY_NTFY_TOKEN, "") ?: if (serverType == ServerType.NTFY) legacyToken else ""
+        // Seamless legacy fallback migration if nodes list is empty
+        if (nodes.isEmpty()) {
+            val legacyType = prefs.getString(KEY_SERVER_TYPE, ServerType.NTFY) ?: ServerType.NTFY
+            val legacyUrl = prefs.getString(KEY_SERVER_URL, "") ?: ""
+            val legacyTopic = prefs.getString(KEY_TOPIC, "") ?: ""
+            val legacyToken = prefs.getString(KEY_TOKEN, "") ?: ""
 
-        val gotifyUrl = prefs.getString(KEY_GOTIFY_SERVER_URL, "") ?: if (serverType == ServerType.GOTIFY) legacyUrl else ""
-        val gotifyTok = prefs.getString(KEY_GOTIFY_TOKEN, "") ?: if (serverType == ServerType.GOTIFY) legacyToken else ""
+            val ntfyUrl = prefs.getString(KEY_NTFY_SERVER_URL, "") ?: if (legacyType == ServerType.NTFY) legacyUrl else ""
+            val gotifyUrl = prefs.getString(KEY_GOTIFY_SERVER_URL, "") ?: if (legacyType == ServerType.GOTIFY) legacyUrl else ""
+            val activeUrl = if (legacyType == ServerType.GOTIFY) gotifyUrl.ifBlank { legacyUrl } else ntfyUrl.ifBlank { legacyUrl }
+
+            if (activeUrl.isNotBlank()) {
+                nodes = listOf(
+                    DeliveryNode(
+                        id = "default-migrated-node",
+                        name = if (legacyType == ServerType.GOTIFY) "Gotify Target Node" else "ntfy Target Node",
+                        serverType = legacyType,
+                        serverUrl = activeUrl,
+                        topic = if (legacyType == ServerType.GOTIFY) "" else prefs.getString(KEY_NTFY_TOPIC, legacyTopic) ?: legacyTopic,
+                        token = if (legacyType == ServerType.GOTIFY) prefs.getString(KEY_GOTIFY_TOKEN, legacyToken) ?: legacyToken else prefs.getString(KEY_NTFY_TOKEN, legacyToken) ?: legacyToken,
+                        isEnabled = true
+                    )
+                )
+            }
+        }
 
         return AppSettings(
-            serverType = serverType,
-            serverUrl = legacyUrl,
-            topic = legacyTopic,
-            token = legacyToken,
-            ntfyServerUrl = ntfyUrl,
-            ntfyTopic = ntfyTop,
-            ntfyToken = ntfyTok,
-            gotifyServerUrl = gotifyUrl,
-            gotifyToken = gotifyTok,
+            nodes = nodes,
             allowlist = prefs.getString(KEY_ALLOWLIST, ".*") ?: ".*",
             keywordRegex = prefs.getString(KEY_KEYWORD_REGEX, ".*") ?: ".*",
             senderRegex = prefs.getString(KEY_SENDER_REGEX, ".*") ?: ".*",
@@ -120,24 +103,13 @@ class EncryptedSettingsRepository(context: Context) : SettingsRepository {
             allowInsecureHttp = prefs.getBoolean(KEY_ALLOW_INSECURE_HTTP, false),
             forwardNotifications = prefs.getBoolean(KEY_FORWARD_NOTIFICATIONS, false),
             autoClearEnabled = prefs.getBoolean(KEY_AUTO_CLEAR_ENABLED, false),
-            autoClearMinutes = prefs.getInt(KEY_AUTO_CLEAR_MINUTES, 1440),
-            requireInternet = prefs.getBoolean(KEY_REQUIRE_INTERNET, true),
-            requireVpn = prefs.getBoolean(KEY_REQUIRE_VPN, false),
-            requireHealthcheck = prefs.getBoolean(KEY_REQUIRE_HEALTHCHECK, false)
+            autoClearMinutes = prefs.getInt(KEY_AUTO_CLEAR_MINUTES, 1440)
         )
     }
 
     override fun saveSettings(settings: AppSettings) {
         prefs.edit()
-            .putString(KEY_SERVER_TYPE, settings.serverType)
-            .putString(KEY_SERVER_URL, settings.activeServerUrl)
-            .putString(KEY_TOPIC, settings.activeTopic)
-            .putString(KEY_TOKEN, settings.activeToken)
-            .putString(KEY_NTFY_SERVER_URL, settings.ntfyServerUrl)
-            .putString(KEY_NTFY_TOPIC, settings.ntfyTopic)
-            .putString(KEY_NTFY_TOKEN, settings.ntfyToken)
-            .putString(KEY_GOTIFY_SERVER_URL, settings.gotifyServerUrl)
-            .putString(KEY_GOTIFY_TOKEN, settings.gotifyToken)
+            .putString(KEY_DELIVERY_NODES, serializeNodes(settings.nodes))
             .putString(KEY_ALLOWLIST, settings.allowlist)
             .putString(KEY_KEYWORD_REGEX, settings.keywordRegex)
             .putString(KEY_SENDER_REGEX, settings.senderRegex)
@@ -150,9 +122,6 @@ class EncryptedSettingsRepository(context: Context) : SettingsRepository {
             .putBoolean(KEY_FORWARD_NOTIFICATIONS, settings.forwardNotifications)
             .putBoolean(KEY_AUTO_CLEAR_ENABLED, settings.autoClearEnabled)
             .putInt(KEY_AUTO_CLEAR_MINUTES, settings.autoClearMinutes)
-            .putBoolean(KEY_REQUIRE_INTERNET, settings.requireInternet)
-            .putBoolean(KEY_REQUIRE_VPN, settings.requireVpn)
-            .putBoolean(KEY_REQUIRE_HEALTHCHECK, settings.requireHealthcheck)
             .apply()
     }
 
@@ -171,6 +140,7 @@ class EncryptedSettingsRepository(context: Context) : SettingsRepository {
         private const val KEY_NTFY_TOKEN = "ntfy_token"
         private const val KEY_GOTIFY_SERVER_URL = "gotify_server_url"
         private const val KEY_GOTIFY_TOKEN = "gotify_token"
+        private const val KEY_DELIVERY_NODES = "delivery_nodes"
         private const val KEY_ALLOWLIST = "allowlist"
         private const val KEY_KEYWORD_REGEX = "keyword_regex"
         private const val KEY_SENDER_REGEX = "sender_regex"
@@ -183,8 +153,44 @@ class EncryptedSettingsRepository(context: Context) : SettingsRepository {
         private const val KEY_FORWARD_NOTIFICATIONS = "forward_notifications"
         private const val KEY_AUTO_CLEAR_ENABLED = "auto_clear_enabled"
         private const val KEY_AUTO_CLEAR_MINUTES = "auto_clear_minutes"
-        private const val KEY_REQUIRE_INTERNET = "require_internet"
-        private const val KEY_REQUIRE_VPN = "require_vpn"
-        private const val KEY_REQUIRE_HEALTHCHECK = "require_healthcheck"
+
+        fun serializeNodes(nodes: List<DeliveryNode>): String {
+            return nodes.joinToString("|||") { node ->
+                val name = node.name.replace("|", "_").replace(":", "_")
+                val type = node.serverType.replace("|", "_")
+                val url = node.serverUrl.replace("|", "_")
+                val topic = node.topic.replace("|", "_")
+                val token = node.token.replace("|", "_")
+                val healthUrl = node.customHealthcheckUrl.replace("|", "_")
+                val method = node.healthcheckMethod.replace("|", "_")
+                val headers = node.healthcheckHeaders.replace("|", "_").replace("\n", "___")
+                "${node.id}:::${name}:::${type}:::${url}:::${topic}:::${token}:::${node.isEnabled}:::${node.requireInternet}:::${node.requireVpn}:::${node.requireHealthcheck}:::${healthUrl}:::${method}:::${headers}:::${node.healthcheckExpectedStatus}"
+            }
+        }
+
+        fun deserializeNodes(raw: String): List<DeliveryNode> {
+            if (raw.isBlank()) return emptyList()
+            return raw.split("|||").mapNotNull { entry ->
+                val parts = entry.split(":::")
+                if (parts.size >= 7) {
+                    DeliveryNode(
+                        id = parts[0],
+                        name = parts[1],
+                        serverType = parts[2],
+                        serverUrl = parts[3],
+                        topic = parts[4],
+                        token = parts[5],
+                        isEnabled = parts[6].toBooleanStrictOrNull() ?: true,
+                        requireInternet = if (parts.size >= 8) parts[7].toBooleanStrictOrNull() ?: true else true,
+                        requireVpn = if (parts.size >= 9) parts[8].toBooleanStrictOrNull() ?: false else false,
+                        requireHealthcheck = if (parts.size >= 10) parts[9].toBooleanStrictOrNull() ?: false else false,
+                        customHealthcheckUrl = if (parts.size >= 11) parts[10] else "",
+                        healthcheckMethod = if (parts.size >= 12 && parts[11].isNotBlank()) parts[11] else "GET",
+                        healthcheckHeaders = if (parts.size >= 13) parts[12].replace("___", "\n") else "",
+                        healthcheckExpectedStatus = if (parts.size >= 14) parts[13].toIntOrNull() ?: 200 else 200
+                    )
+                } else null
+            }
+        }
     }
 }
