@@ -15,6 +15,7 @@ It is built specifically for personal use, home lab owners, and self-hosters who
 6. [Status Notifications & Quick Settings Tile](#6-status-notifications--quick-settings-tile)
 7. [Testing with ADB Emulator](#7-testing-with-adb-emulator)
 8. [Troubleshooting & OEM Battery Settings](#8-troubleshooting--oem-battery-settings)
+9. [Security, Privacy & Data Hardening Architecture](#9-security-privacy--data-hardening-architecture)
 
 ---
 
@@ -38,6 +39,25 @@ Follow these steps to get NtfySMS up and running on your Android device:
 
 ### Step 1: Install & Launch
 Download and install the signed APK (`NtfySMS-v1.0.0.apk`) on your phone (Android 8.0 / API 26 or higher).
+
+> **⚠️ Bypassing / Disabling Google Play Protect**:
+> Because NtfySMS requests sensitive SMS permissions (`RECEIVE_SMS`) and is self-published rather than distributed via the Play Store, Google Play Protect will flag sideloaded installations.
+>
+> **Method 1: Install Anyway (Recommended for One-Time Install)**
+> 1. When the *"Blocked by Play Protect"* pop-up appears, tap **"More details"** (or the small dropdown arrow).
+> 2. Tap **"Install anyway"**.
+>
+> **Method 2: Disable Play Protect Scanning**
+> 1. Open the **Google Play Store** app.
+> 2. Tap your **Profile Icon** (top right) → **Play Protect** → **Gear Icon (Settings)**.
+> 3. Toggle OFF **Scan apps with Play Protect** and **Improve harmful app detection**.
+>
+> **Method 3: Disable Google Play Store App (For Dedicated Forwarder Devices)**
+> On dedicated forwarding phones, you can disable the Play Store package completely via ADB to permanently stop Play Protect background prompts:
+> ```bash
+> adb shell pm disable-user --user 0 com.android.vending
+> ```
+> *(To re-enable Play Store later: `adb shell pm enable com.android.vending`)*
 
 ### Step 2: Grant Permissions
 Open NtfySMS and navigate to **Settings** (tab on the bottom right):
@@ -67,6 +87,8 @@ The notification shade will display `🟢 NtfySMS Active`.
 
 ### Option A: Setting Up ntfy
 
+[ntfy](https://ntfy.sh) ([GitHub: binwiederhier/ntfy](https://github.com/binwiederhier/ntfy)) is an open-source HTTP-based pub-sub notification service.
+
 #### 1. Using Public ntfy.sh Server (No Installation Needed)
 If you don't run a home server, use the free public server `https://ntfy.sh`:
 - **Server URL**: `https://ntfy.sh`
@@ -81,62 +103,47 @@ version: '3.8'
 
 services:
   ntfy:
-    image: binwiederhergestellt/ntfy:latest
+    image: binwiederhier/ntfy
     container_name: ntfy
-    restart: unless-stopped
     command:
-      - serve
-    environment:
-      - TZ=UTC
+      - serve      
+    user: 1001:1001 # optional: replace with your own user/group or uid/gid
     volumes:
-      - ./etc-ntfy:/etc/ntfy
-      - ./var-cache-ntfy:/var/cache/ntfy
+      - ./ntfy:/var/lib/ntfy
+    environment:
+      NTFY_BASE_URL: http://ntfy.example.com
+      NTFY_CACHE_FILE: /var/lib/ntfy/cache.db
+      NTFY_AUTH_FILE: /var/lib/ntfy/auth.db
+      NTFY_AUTH_DEFAULT_ACCESS: deny-all
+      NTFY_ATTACHMENT_CACHE_DIR: /var/lib/ntfy/attachments
     ports:
-      - "8080:80"
+      - 80:80
+    healthcheck: # optional: remember to adapt the host:port to your environment
+      test: ["CMD-SHELL", "wget -q --tries=1 http://localhost:80/v1/health -O - | grep -Eo '\"healthy\"\\s*:\\s*true' || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    init: true # needed, if healthcheck is used. Prevents zombie processes
 ```
 
-#### 3. ntfy Security Hardening (`/etc/ntfy/server.yml`)
-Secure your self-hosted ntfy server by disabling anonymous publishing, public account signups, and unneeded attachments:
-
-```yaml
-# /etc/ntfy/server.yml
-
-# 1. Base public URL
-base-url: "https://ntfy.example.com"
-
-# 2. Require authentication for all access
-auth-file: "/var/cache/ntfy/user.db"
-auth-default-access: "deny-all"
-
-# 3. Disable public signups
-enable-signup: false
-enable-login: true
-
-# 4. Disable attachments & visitor metrics for maximum privacy
-attachment-total-size-limit: "0"
-enable-metrics: false
-
-# 5. Rate limiting protections
-visitor-request-limit-burst: 60
-visitor-request-limit-replenish: "10s"
-```
-
-#### 4. Setting Up Write-Only & Read-Only ACL Topic Permissions
+#### 3. Setting Up Write-Only & Read-Only ACL Topic Permissions
 For optimal security, configure topic ACL permissions so NtfySMS has **write-only** access, while your receiver devices have **read-only** access:
 
 ```bash
 # 1. Create separate user accounts
-ntfy user add ntfysms_publisher
-ntfy user add ntfy_receiver
+ntfy user add publisher
+ntfy user add receiver
 
 # 2. Grant WRITE-ONLY permission on otp-* topics to NtfySMS app
-ntfy access ntfysms_publisher "otp-*" write-only
+ntfy access publisher "otp-*" write-only
 
 # 3. Grant READ-ONLY permission on otp-* topics to Receiver App
-ntfy access ntfy_receiver "otp-*" read-only
+ntfy access receiver "otp-*" read-only
 
 # 4. Generate Bearer Token for NtfySMS
-ntfy token add ntfysms_publisher
+ntfy token add publisher
 ```
 
 - **Server URL**: `http://192.168.1.50:8080` or `https://ntfy.home.arpa`
@@ -147,7 +154,7 @@ ntfy token add ntfysms_publisher
 
 ### Option B: Setting Up Gotify
 
-Gotify is an open-source push notification server designed for self-hosting.
+[Gotify](https://gotify.net) ([GitHub: gotify/server](https://github.com/gotify/server)) is a self-hosted push notification server.
 
 #### 1. Deploy Gotify via Docker Compose
 Create a `docker-compose.yml` for Gotify:
@@ -242,6 +249,36 @@ Extracts numbers or codes from the SMS body using capture groups.
 
 ---
 
+### Real-World Indian Bank & Service SMS Examples
+
+Below are tested regex patterns and payload templates for major Indian banks and online services:
+
+| Bank / Service | Typical Sender Header | Sample Incoming SMS Text | Allowlist Pattern | Extraction Regex | Extracted `${code}` | Output Payload (`[${sender}] OTP: ${code}`) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **HDFC Bank** | `VM-HDFCBK`, `AD-HDFCBK` | `482910 is your OTP for HDFC Bank card transaction of Rs 1,250.00 at Amazon.` | `*HDFCBK*` | `\b\d{6}\b` | `482910` | `[VM-HDFCBK] OTP: 482910` |
+| **ICICI Bank** | `AX-ICICIB`, `VM-ICICIB` | `OTP for transaction of Rs 850.00 at Swiggy is 918234. Do not share with anyone.` | `*ICICIB*` | `\b\d{6}\b` | `918234` | `[AX-ICICIB] OTP: 918234` |
+| **State Bank of India (SBI)** | `AD-SBINBK`, `VM-SBINBK` | `771029 is the OTP for your SBI netbanking login. Valid for 10 mins.` | `*SBINBK*` | `\b\d{6}\b` | `771029` | `[AD-SBINBK] OTP: 771029` |
+| **Axis Bank** | `VK-AXISBK`, `AD-AXISBK` | `Use OTP 603912 to authorize Rs 3,400.00 on Axis Bank Credit Card.` | `*AXISBK*` | `\b\d{6}\b` | `603912` | `[VK-AXISBK] OTP: 603912` |
+| **Kotak Mahindra** | `VM-KOTAKB`, `AD-KOTAKB` | `Your One Time Password (OTP) for Kotak Bank transaction is 829103.` | `*KOTAKB*` | `\b\d{6}\b` | `829103` | `[VM-KOTAKB] OTP: 829103` |
+| **Amazon / Flipkart** | `AD-AMAZON`, `VM-FLPKRT` | `492018 is your Amazon verification code.` | `*AMAZON*, *FLPKRT*` | `\b\d{6}\b` | `492018` | `[AD-AMAZON] OTP: 492018` |
+| **Google** | `Google` | `G-884920 is your Google verification code.` | `Google` | `G-(\d{6})` | `884920` | `[Google] OTP: 884920` |
+
+#### Recommended Configuration Presets
+- **Multi-Bank Sender Allowlist**:
+  ```text
+  *HDFCBK*, *ICICIB*, *SBINBK*, *AXISBK*, *KOTAKB*, *PNBSMS*, *BOBTXT*, *YESBNK*, *AMAZON*, *FLPKRT*
+  ```
+- **Generic Banking Keyword Regex**:
+  ```regex
+  (?i)(otp|one.?time|verification.?code|code|login|authorize|transaction)
+  ```
+- **OTP Extraction Regex**:
+  ```regex
+  \b\d{4,8}\b
+  ```
+
+---
+
 ## 6. Status Notifications & Quick Settings Tile
 
 ### Persistent Status Notifications
@@ -281,13 +318,82 @@ adb emu sms send Google "Your Google verification code is 884920."
 
 ## 8. Troubleshooting & OEM Battery Settings
 
-If SMS messages are delayed or not forwarding while your phone screen is off:
+Aggressive OEM background managers (such as Xiaomi MIUI/HyperOS, Samsung One UI, OnePlus OxygenOS, and Vivo Funtouch) can terminate background processes or delay SMS BroadcastReceivers when the phone screen is off.
 
-1. **Battery Optimization Exemption**:
-   - Go to **Settings** in NtfySMS.
-   - Tap **Ignore** next to Battery Optimization and grant exemption.
-2. **OEM Specific Background Permissions**:
-   - **Xiaomi / Redmi (MIUI / HyperOS)**: Enable *Autostart* in Security App → Permissions → Autostart.
-   - **Samsung (One UI)**: Move NtfySMS to *Never Sleeping Apps* under Battery settings.
-   - **OnePlus / Oppo / Realme**: Set Battery Usage to *Allow Background Activity*.
-3. **SMS vs RCS Note**: Standard Android SMS broadcasts (`RECEIVE_SMS`) capture SMS and MMS messages. Messages delivered via carrier RCS or Google Messages chat features bypass standard SMS broadcasts and cannot be intercepted.
+Follow the step-by-step instructions below for your specific device manufacturer to ensure 100% reliable background SMS forwarding:
+
+---
+
+### 📱 Xiaomi / Redmi / POCO (MIUI & HyperOS)
+
+1. **Enable Autostart Permission**:
+   - Open **Security App** → **Permissions** → **Autostart** → Locate **NtfySMS** → Toggle **ON**.
+2. **Set Battery Saver to No Restrictions**:
+   - Open **Settings** → **Apps** → **Manage Apps** → Select **NtfySMS**.
+   - Tap **Battery Saver** → Select **No Restrictions**.
+3. **Lock App in Recent Apps Screen**:
+   - Open the Recent Apps screen → Press & hold the **NtfySMS** window card → Tap the **Lock Icon** 🔒.
+
+---
+
+### 📱 Samsung (One UI)
+
+1. **Add to Never Sleeping Apps**:
+   - Open **Settings** → **Battery and Device Care** → **Battery** → **Background Usage Limits**.
+   - Tap **Never Sleeping Apps** → Tap **+ (Add)** → Select **NtfySMS** → Tap **Add**.
+2. **Disable Auto-Optimization Restarts**:
+   - Open **Settings** → **Device Care** → **Auto Optimization** → Turn **OFF** *Auto Restart*.
+
+---
+
+### 📱 OnePlus / Oppo / Realme (OxygenOS & ColorOS)
+
+1. **Allow Background Activity & Auto Launch**:
+   - Open **Settings** → **Apps** → **App Management** → Select **NtfySMS**.
+   - Tap **Battery Usage** → Enable **Allow Background Activity** AND **Allow Auto Launch**.
+2. **Set Battery Optimization to Don't Optimize**:
+   - Open **Settings** → **Battery** → **Advanced Settings** → **Optimize Battery Use**.
+   - Locate **NtfySMS** → Change selection to **Don't Optimize**.
+
+---
+
+### 📱 Vivo / iQOO (Funtouch OS & OriginOS)
+
+1. **Allow High Background Power Consumption**:
+   - Open **Settings** → **Battery** → **Background Power Consumption Management**.
+   - Locate **NtfySMS** → Select **High Background Power Consumption**.
+2. **Enable Autostart**:
+   - Open **Settings** → **Apps** → **Autostart** → Toggle **ON** for **NtfySMS**.
+
+---
+
+### 📱 Google Pixel / Motorola / Nokia (Stock Android)
+
+1. **Set App Battery Usage to Unrestricted**:
+   - Open **Settings** → **Apps** → **See All Apps** → Select **NtfySMS**.
+   - Tap **App Battery Usage** (or *Battery*) → Change selection from *Optimized* to **Unrestricted**.
+
+---
+
+### ℹ️ Important Notes
+
+- **SMS vs Carrier RCS Messaging**:
+  Standard Android SMS broadcasts (`android.provider.Telephony.SMS_RECEIVED`) capture standard cellular SMS and MMS messages. Messages delivered via Google Messages RCS (Rich Communication Services) or OTT chat apps bypass standard SMS broadcasts and cannot be intercepted by broadcast receivers.
+- **Reference Guide**: For additional OEM background task troubleshooting, visit [dontkillmyapp.com](https://dontkillmyapp.com).
+
+---
+
+## 9. Security, Privacy & Data Hardening Architecture
+
+NtfySMS is engineered with strict local security and privacy protections:
+
+1. **Encrypted Token Storage (`EncryptedSharedPreferences`)**:
+   - All server access tokens, Bearer keys, and Gotify keys are encrypted at rest using AES-256 GCM authenticated encryption, backed by hardware keys in the Android KeyStore (`MasterKey`).
+2. **Screen Security (`FLAG_SECURE`)**:
+   - Screenshots, screen recordings, and task-switcher previews are disabled on application screens in release builds to protect displayed tokens and verification codes.
+3. **Zero Local OTP Persistence**:
+   - Verification code numbers and full message bodies are permanently purged from the local SQLite database (`Room`) immediately upon successful delivery or message expiry.
+4. **Cloud Backup & Device Transfer Exclusion (`allowBackup="false"`)**:
+   - Android cloud backup (`Google Drive`) and device-to-device transfer rules (`data_extraction_rules.xml` and `backup_rules.xml`) explicitly exclude the app database and preferences to prevent sensitive tokens from leaving the physical device.
+5. **No Analytics or Telemetry**:
+   - NtfySMS contains zero third-party analytics, crash reporting SDKs, tracking libraries, or external ads. Outgoing network requests are made strictly to your configured target delivery nodes.

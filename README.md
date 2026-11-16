@@ -35,10 +35,16 @@ It is designed for personal use, home lab owners, and self-hosters running serve
 The optimized release binary is generated at:
 `app/build/outputs/apk/release/NtfySMS-v1.0.0.apk`
 
-### 2. Install via ADB
+### 2. Install via ADB or Sideload
 ```bash
-adb install app/build/outputs/apk/release/NtfySMS-v1.0.0.apk
+adb install -r -g app/build/outputs/apk/release/NtfySMS-v1.0.0.apk
 ```
+
+> **⚠️ Bypassing / Disabling Play Protect**:
+> - **Install Anyway**: Tap **"More details"** → **"Install anyway"** when prompted.
+> - **Disable Scanning**: Open **Play Store → Profile → Play Protect → Settings → Toggle OFF Scan apps**.
+> - **Disable Play Store App (ADB)**: On dedicated forwarder devices, disable Play Store package completely:
+>   `adb shell pm disable-user --user 0 com.android.vending`
 
 ---
 
