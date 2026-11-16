@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NtfySMS — Personal OTP SMS & Push Notification Forwarder for Android</title>
-  <meta name="description" content="Open-source Android app to forward incoming OTP SMS and notifications to ntfy or Gotify servers with node-level pre-checks, VPN requirement, and HTTP healthchecks.">
+  <meta name="description" content="Open-source Android app to forward incoming OTP SMS and notifications to ntfy or Gotify servers with write-only topics, ACL security, node-level pre-checks, and regex parsing.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -44,13 +44,13 @@
 
     /* Header */
     header {
-      padding: 24px 0;
+      padding: 20px 0;
       border-bottom: 1px solid var(--card-border);
       backdrop-filter: blur(12px);
       position: sticky;
       top: 0;
       z-index: 100;
-      background: rgba(7, 10, 18, 0.8);
+      background: rgba(7, 10, 18, 0.85);
     }
     .nav {
       display: flex;
@@ -90,7 +90,7 @@
 
     /* Hero Section */
     .hero {
-      padding: 100px 0 60px 0;
+      padding: 80px 0 40px 0;
       text-align: center;
       position: relative;
     }
@@ -108,7 +108,7 @@
       margin-bottom: 24px;
     }
     .hero h1 {
-      font-size: 3.75rem;
+      font-size: 3.5rem;
       font-weight: 800;
       line-height: 1.1;
       letter-spacing: -2px;
@@ -118,10 +118,10 @@
       -webkit-text-fill-color: transparent;
     }
     .hero p {
-      font-size: 1.25rem;
+      font-size: 1.2rem;
       color: var(--text-muted);
       max-width: 760px;
-      margin: 0 auto 40px auto;
+      margin: 0 auto 36px auto;
       font-weight: 400;
     }
     .hero-actions {
@@ -136,10 +136,10 @@
       display: inline-flex;
       align-items: center;
       gap: 10px;
-      padding: 16px 32px;
+      padding: 14px 28px;
       border-radius: 12px;
       font-weight: 700;
-      font-size: 1rem;
+      font-size: 0.95rem;
       text-decoration: none;
       transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
       cursor: pointer;
@@ -154,7 +154,7 @@
       box-shadow: 0 8px 32px rgba(16, 185, 129, 0.5);
     }
     .btn-secondary {
-      background: var(--surface);
+      background: var(--card-bg);
       color: var(--text);
       border: 1px solid var(--card-border);
     }
@@ -166,7 +166,7 @@
 
     /* Pipeline Graphic Showcase */
     .pipeline-preview {
-      margin: 60px auto;
+      margin: 50px auto 20px auto;
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 20px;
@@ -175,7 +175,7 @@
       box-shadow: 0 20px 50px rgba(0,0,0,0.5);
     }
     .pipeline-title {
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       font-weight: 700;
       color: var(--text-muted);
       text-transform: uppercase;
@@ -213,23 +213,23 @@
       text-align: center;
     }
 
-    /* Features Grid */
+    /* Sections */
     .section {
-      padding: 80px 0;
+      padding: 60px 0;
     }
     .section-title {
       text-align: center;
-      margin-bottom: 60px;
+      margin-bottom: 50px;
     }
     .section-title h2 {
-      font-size: 2.5rem;
+      font-size: 2.25rem;
       font-weight: 800;
       letter-spacing: -1px;
       margin-bottom: 12px;
     }
     .section-title p {
       color: var(--text-muted);
-      font-size: 1.1rem;
+      font-size: 1.05rem;
     }
 
     .grid {
@@ -241,51 +241,108 @@
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 16px;
-      padding: 32px;
+      padding: 28px;
       backdrop-filter: blur(12px);
       transition: all 0.25s ease;
     }
     .card:hover {
       border-color: rgba(16, 185, 129, 0.4);
-      transform: translateY(-4px);
+      transform: translateY(-3px);
     }
     .card-icon {
-      width: 48px;
-      height: 48px;
+      width: 44px;
+      height: 44px;
       border-radius: 12px;
       background: rgba(16, 185, 129, 0.1);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.5rem;
-      margin-bottom: 20px;
+      font-size: 1.4rem;
+      margin-bottom: 16px;
     }
     .card h3 {
-      font-size: 1.25rem;
+      font-size: 1.2rem;
       font-weight: 700;
       margin-bottom: 10px;
     }
     .card p {
       color: var(--text-muted);
-      font-size: 0.95rem;
+      font-size: 0.92rem;
       line-height: 1.6;
     }
 
+    /* Steps List */
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .step-item {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .step-num {
+      background: var(--primary);
+      color: #042f2e;
+      font-weight: 800;
+      font-size: 0.85rem;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-content {
+      flex: 1;
+    }
+    .step-content h4 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .step-content p {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+    }
+
     /* Code Snippet Box */
+    .code-block {
+      background: #090d16;
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 14px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      color: var(--accent);
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin-top: 10px;
+    }
+
+    /* Tabbed Section */
     .tab-box {
       background: #090d16;
       border: 1px solid var(--card-border);
       border-radius: 16px;
       overflow: hidden;
-      margin-top: 40px;
+      margin-top: 30px;
     }
     .tab-header {
       display: flex;
       background: #0f172a;
       border-bottom: 1px solid var(--card-border);
+      overflow-x: auto;
     }
     .tab-btn {
-      padding: 14px 24px;
+      padding: 14px 20px;
       background: transparent;
       border: none;
       color: var(--text-muted);
@@ -294,19 +351,15 @@
       cursor: pointer;
       border-bottom: 2px solid transparent;
       transition: all 0.2s;
+      white-space: nowrap;
     }
     .tab-btn.active {
       color: var(--primary-light);
       border-bottom-color: var(--primary);
-      background: rgba(16, 185, 129, 0.05);
+      background: rgba(16, 185, 129, 0.08);
     }
     .tab-content {
       padding: 24px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.9rem;
-      color: var(--accent);
-      white-space: pre-wrap;
-      word-break: break-all;
     }
 
     /* Footer */
@@ -323,14 +376,15 @@
     }
 
     @media (max-width: 768px) {
-      .hero h1 { font-size: 2.5rem; }
+      .hero h1 { font-size: 2.4rem; }
       .pipeline-flow { grid-template-columns: 1fr; }
-      .flow-arrow { transform: rotate(90deg); margin: 8px 0; }
+      .flow-arrow { transform: rotate(90deg); margin: 6px 0; }
     }
   </style>
 </head>
 <body>
 
+  <!-- Navigation -->
   <header>
     <div class="container nav">
       <div class="logo">
@@ -339,30 +393,32 @@
       </div>
       <div class="nav-links">
         <a href="#features" class="nav-link">Features</a>
-        <a href="#pipeline" class="nav-link">Architecture</a>
-        <a href="#code" class="nav-link">Curl Examples</a>
-        <a href="https://github.com/aman/NtfySMS" class="btn btn-secondary" style="padding: 10px 20px; font-size: 0.85rem;" target="_blank">GitHub Repo</a>
+        <a href="#ntfy-setup" class="nav-link">ntfy ACL Setup</a>
+        <a href="#gotify-setup" class="nav-link">Gotify Setup</a>
+        <a href="#regex-guide" class="nav-link">Regex Guide</a>
+        <a href="https://github.com/aman400/ntfysms" class="btn btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;" target="_blank">GitHub Repo</a>
       </div>
     </div>
   </header>
 
+  <!-- Hero Section -->
   <section class="hero">
     <div class="container">
       <div class="badge">🚀 Open Source Android Application — Version 1.0.0</div>
       <h1>Forward OTP SMS & Notifications to ntfy & Gotify</h1>
-      <p>Privacy-focused Android forwarder featuring node-level pre-checks, VPN throttling, custom HTTP healthcheck pings, and dynamic regex payload templates.</p>
+      <p>Privacy-focused Android forwarder featuring write-only topic ACL security, node-level pre-checks, Tailscale/VPN throttling, and regex payload extraction.</p>
 
       <div class="hero-actions">
-        <a href="https://github.com/aman/NtfySMS/releases/latest" class="btn btn-primary">
+        <a href="https://github.com/aman400/ntfysms/releases/latest" class="btn btn-primary">
           ⚡ Download Release APK (v1.0.0)
         </a>
-        <a href="https://github.com/aman/NtfySMS#readme" class="btn btn-secondary" target="_blank">
-          📖 Read Documentation
+        <a href="https://github.com/aman400/ntfysms#readme" class="btn btn-secondary" target="_blank">
+          📖 Read Manual Docs
         </a>
       </div>
 
-      <!-- Pipeline Interactive Showcase -->
-      <div class="pipeline-preview" id="pipeline">
+      <!-- Pipeline Showcase -->
+      <div class="pipeline-preview">
         <div class="pipeline-title">Visual Dispatch Pipeline Flow</div>
         <div class="pipeline-flow">
           <div class="flow-node">
@@ -372,7 +428,7 @@
           <div class="flow-arrow">→</div>
           <div class="flow-node">
             <div class="flow-node-header">🔍 2. Filter & Regex Extractor</div>
-            <div class="flow-node-body">Sender allowlist + regex variable parsing (${code})</div>
+            <div class="flow-node-body">Sender allowlist + regex variable extraction (${code})</div>
           </div>
           <div class="flow-arrow">→</div>
           <div class="flow-node">
@@ -396,61 +452,246 @@
       <div class="grid">
         <div class="card">
           <div class="card-icon">🚀</div>
-          <h3>Multi-Node Target Architecture</h3>
-          <p>Configure multiple delivery destinations (`DeliveryNode`) supporting ntfy text/plain POST and Gotify JSON payloads with app tokens.</p>
+          <h3>ntfy & Gotify Target Nodes</h3>
+          <p>Configure multiple delivery targets for public ntfy.sh servers, self-hosted ntfy instances, or Gotify push servers with Bearer tokens.</p>
         </div>
 
         <div class="card">
           <div class="card-icon">🔒</div>
+          <h3>Write-Only Topic ACL Security</h3>
+          <p>Grant NtfySMS write-only access to post OTPs to topics (`otp-*`), while receiver devices use read-only tokens for ultimate topic security.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🛡️</div>
           <h3>Node-Level VPN & Pre-Checks</h3>
           <p>Require active Tailscale, WireGuard, or OpenVPN connection per target node. Messages remain queued and auto-execute when connected.</p>
         </div>
 
         <div class="card">
           <div class="card-icon">🩺</div>
-          <h3>Custom HTTP Request Healthchecks</h3>
-          <p>Ping custom health endpoints (GET/HEAD/POST) with custom HTTP headers and expected HTTP status codes before dispatching payloads.</p>
-        </div>
-
-        <div class="card">
-          <div class="card-icon">⚡</div>
-          <h3>Reactive Dynamic Auto-Execution</h3>
-          <p>Background 10-second polling loop and network callback listener automatically deliver queued messages the instant pre-conditions pass.</p>
+          <h3>Custom HTTP Healthcheck Pings</h3>
+          <p>Ping target server health endpoints (GET/HEAD/POST) with custom HTTP headers and expected HTTP status codes before dispatching payloads.</p>
         </div>
 
         <div class="card">
           <div class="card-icon">🔍</div>
-          <h3>Regex Parsing & Custom Templates</h3>
+          <h3>Regex Capture & Payload Templates</h3>
           <p>Extract OTP codes and variables (${code}, ${otp}, ${group1}) with customizable format templates (e.g. `[${sender}] Code: ${code}`).</p>
         </div>
 
         <div class="card">
-          <div class="card-icon">🛡️</div>
+          <div class="card-icon">🧹</div>
           <h3>Zero OTP Persistence</h3>
-          <p>OTP codes and sensitive message texts are deleted from the local SQLite database immediately upon delivery or expiry to satisfy security requirements.</p>
+          <p>OTP codes and sensitive message texts are deleted from local SQLite storage immediately upon delivery or expiry to satisfy security requirements.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ntfy Setup & ACL Permissions Section -->
+  <section class="section" id="ntfy-setup">
+    <div class="container">
+      <div class="section-title">
+        <h2>🚀 ntfy Server & ACL Topic Permissions Setup</h2>
+        <p>Configure write-only publishing for NtfySMS and read-only subscription for receiver devices.</p>
+      </div>
+
+      <div class="card">
+        <h3>Step-by-Step Security Setup</h3>
+        <p>Setting up access control lists (ACL) ensures the forwarding app can only publish OTPs, while listening apps can only receive them.</p>
+
+        <div class="step-list">
+          <div class="step-item">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <h4>Deploy ntfy via Docker Compose</h4>
+              <p>Create a <code>docker-compose.yml</code> file on your server:</p>
+              <div class="code-block">version: '3.8'
+
+services:
+  ntfy:
+    image: binwiederhergestellt/ntfy:latest
+    container_name: ntfy
+    restart: unless-stopped
+    command:
+      - serve
+    volumes:
+      - ./etc-ntfy:/etc/ntfy
+      - ./var-cache-ntfy:/var/cache/ntfy
+    ports:
+      - "8080:80"</div>
+            </div>
+          </div>
+
+          <div class="step-item">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <h4>ntfy Security Hardening (`/etc/ntfy/server.yml`)</h4>
+              <p>Disable anonymous publishing, public signups, and unneeded attachments:</p>
+              <div class="code-block"># /etc/ntfy/server.yml
+base-url: "https://ntfy.example.com"
+
+# Require authentication for all topic operations
+auth-file: "/var/cache/ntfy/user.db"
+auth-default-access: "deny-all"
+
+# Disable public signups & unneeded attachments
+enable-signup: false
+enable-login: true
+attachment-total-size-limit: "0"
+enable-metrics: false</div>
+            </div>
+          </div>
+
+          <div class="step-item">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <h4>Create Users for Forwarder and Listener</h4>
+              <p>Create two separate user accounts on your ntfy server:</p>
+              <div class="code-block"># Create publisher account for NtfySMS app
+ntfy user add ntfysms_publisher
+
+# Create subscriber account for your receiver phone / desktop
+ntfy user add ntfy_receiver</div>
+            </div>
+          </div>
+
+          <div class="step-item">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <h4>Grant Write-Only & Read-Only Topic Permissions</h4>
+              <p>Restrict topic access so NtfySMS cannot read messages, and receivers cannot post messages:</p>
+              <div class="code-block"># Grant WRITE-ONLY permission on otp-* topics to NtfySMS
+ntfy access ntfysms_publisher "otp-*" write-only
+
+# Grant READ-ONLY permission on otp-* topics to Receiver App
+ntfy access ntfy_receiver "otp-*" read-only</div>
+            </div>
+          </div>
+
+          <div class="step-item">
+            <div class="step-num">5</div>
+            <div class="step-content">
+              <h4>Generate Access Token & Configure NtfySMS</h4>
+              <p>Generate a Bearer Token for `ntfysms_publisher` and paste it into NtfySMS:</p>
+              <div class="code-block">ntfy token add ntfysms_publisher</div>
+              <p style="margin-top: 8px;">In <strong>NtfySMS App</strong>: Go to <strong>Settings → Delivery Target Nodes → + Add Node</strong> → Choose <strong>ntfy</strong> → Enter Server URL, Topic (`otp-myfeed`), and paste the generated `tk_...` token into <strong>Access Token</strong>.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Gotify Setup Section -->
+  <section class="section" id="gotify-setup">
+    <div class="container">
+      <div class="section-title">
+        <h2>🔔 Gotify Server Setup</h2>
+        <p>Deploy Gotify and generate Application Tokens (`X-Gotify-Key`) for push delivery.</p>
+      </div>
+
+      <div class="card">
+        <h3>Deploying Gotify & Creating Application Token</h3>
+        <div class="step-list">
+          <div class="step-item">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <h4>Run Gotify Server via Docker Compose</h4>
+              <p>Create a <code>docker-compose.yml</code> file for Gotify:</p>
+              <div class="code-block">version: '3.8'
+
+services:
+  gotify:
+    image: gotify/server:latest
+    container_name: gotify
+    restart: unless-stopped
+    environment:
+      - GOTIFY_SERVER_PORT=80
+      - GOTIFY_DATABASE_DIALECT=sqlite3
+      - GOTIFY_DATABASE_CONNECTION=data/gotify.db
+    volumes:
+      - ./gotify_data:/app/data
+    ports:
+      - "8081:80"</div>
+            </div>
+          </div>
+
+          <div class="step-item">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <h4>Generate Application Token in Gotify Web UI</h4>
+              <p>Log in to Gotify Web UI (`http://192.168.1.50:8080`) → Click <strong>Apps</strong> → Click <strong>Create Application</strong> → Name: `NtfySMS` → Copy generated token (`A1b2C3d4E5f6`).</p>
+            </div>
+          </div>
+
+          <div class="step-item">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <h4>Configure Gotify Node in NtfySMS App</h4>
+              <p>In <strong>NtfySMS App</strong>: Go to <strong>Settings → Delivery Target Nodes → + Add Node</strong> → Choose <strong>Gotify</strong> → Enter Server URL and paste the token into <strong>App Token (X-Gotify-Key)</strong>.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Regex Parsing & Payload Format Guide -->
+  <section class="section" id="regex-guide">
+    <div class="container">
+      <div class="section-title">
+        <h2>🔍 Regex Variable Extraction & Payload Customization</h2>
+        <p>Extract verification codes and format custom outgoing payloads with live preview testing.</p>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <h3>Body Extraction Regex</h3>
+          <p>Extracts digits or codes from SMS text body using capture groups.</p>
+          <div class="code-block"># Default regex (finds 4-8 digit numbers):
+\b\d{4,8}\b
+
+# Capture group regex example:
+Your (?:OTP|verification code) is (\d{6})</div>
+          <p style="margin-top: 10px;">Group 1 captures automatically map to <code>${code}</code>, <code>${otp}</code>, and <code>${group1}</code>.</p>
+        </div>
+
+        <div class="card">
+          <h3>Sender Header Regex</h3>
+          <p>Extracts bank codes or identifiers from SMS sender headers.</p>
+          <div class="code-block"># Example sender regex:
+^([A-Z]{2})-([A-Z]+)$</div>
+          <p style="margin-top: 10px;">For sender <code>VM-HDFCBK</code>, <code>${senderGroup1}</code> = <code>VM</code>, <code>${senderGroup2}</code> = <code>HDFCBK</code>.</p>
         </div>
       </div>
 
       <!-- Tabbed Code Box -->
-      <div class="tab-box" id="code">
+      <div class="tab-box" style="margin-top: 30px;">
         <div class="tab-header">
-          <button class="tab-btn active" onclick="switchTab('ntfy')">🚀 ntfy Curl Request</button>
-          <button class="tab-btn" onclick="switchTab('gotify')">🔔 Gotify API Payload</button>
-          <button class="tab-btn" onclick="switchTab('adb')">📱 Emulator ADB SMS Test</button>
+          <button class="tab-btn active" onclick="switchTab('ex1')">Template Example 1</button>
+          <button class="tab-btn" onclick="switchTab('ex2')">Template Example 2</button>
+          <button class="tab-btn" onclick="switchTab('adb')">Emulator ADB Test</button>
         </div>
-        <div class="tab-content" id="tab-code">curl -d "[VM-HDFCBK] OTP Code: 482910" https://ntfy.sh/my-secret-otp-topic</div>
+        <div class="tab-content" id="tab-code"># Custom Payload Template:
+[${sender}] OTP Code: ${code}
+
+# Outgoing Payload Output:
+[VM-HDFCBK] OTP Code: 482910</div>
       </div>
 
     </div>
   </section>
 
+  <!-- Footer -->
   <footer>
     <div class="container">
       <p>NtfySMS — Open Source Android App built in Kotlin. Released under MIT License.</p>
       <p style="margin-top: 8px;">
-        <a href="https://github.com/aman/NtfySMS" target="_blank">GitHub Repository</a> •
-        <a href="https://github.com/aman/NtfySMS/releases" target="_blank">Releases</a> •
-        <a href="https://github.com/aman/NtfySMS/blob/main/RELEASE_GUIDE.md" target="_blank">Release Guide</a>
+        <a href="https://github.com/aman400/ntfysms" target="_blank">GitHub Repository</a> •
+        <a href="https://github.com/aman400/ntfysms/releases" target="_blank">Releases</a> •
+        <a href="https://github.com/aman400/ntfysms/blob/main/DOCUMENTATION.md" target="_blank">Complete Manual</a>
       </p>
     </div>
   </footer>
@@ -461,12 +702,12 @@
       event.target.classList.add('active');
 
       const codeBox = document.getElementById('tab-code');
-      if (type === 'ntfy') {
-        codeBox.textContent = 'curl -d "[VM-HDFCBK] OTP Code: 482910" https://ntfy.sh/my-secret-otp-topic';
-      } else if (type === 'gotify') {
-        codeBox.textContent = 'curl -X POST "https://gotify.example.com/message?token=A1b2C3d4E5f6" \\\n  -F "title=NtfySMS OTP" \\\n  -F "message=[VM-HDFCBK] Code: 482910"';
+      if (type === 'ex1') {
+        codeBox.textContent = '# Custom Payload Template:\n[${sender}] OTP Code: ${code}\n\n# Outgoing Payload Output:\n[VM-HDFCBK] OTP Code: 482910';
+      } else if (type === 'ex2') {
+        codeBox.textContent = '# Custom Payload Template:\n🔐 Security Alert from ${sender}\nVerification Code: ${code}\nFull Message: ${body}\n\n# Outgoing Payload Output:\n🔐 Security Alert from VM-HDFCBK\nVerification Code: 482910\nFull Message: Your OTP for transaction of Rs 500 is 482910.';
       } else if (type === 'adb') {
-        codeBox.textContent = 'adb emu sms send VM-HDFCBK "Your OTP for transaction of Rs 500 is 482910"';
+        codeBox.textContent = '# Android Studio Emulator Test Command:\nadb emu sms send VM-HDFCBK "Your OTP for transaction of Rs 500 is 482910."';
       }
     }
   </script>

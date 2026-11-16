@@ -7,12 +7,12 @@ plugins {
 
 android {
     namespace = "in.ntfysms"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "in.ntfysms"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0.0"
 
@@ -54,6 +54,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     applicationVariants.all {

@@ -11,7 +11,6 @@ import `in`.ntfysms.data.DeliveryNode
 import `in`.ntfysms.data.EncryptedSettingsRepository
 import `in`.ntfysms.data.MessageEntity
 import `in`.ntfysms.filter.SmsFilter
-import `in`.ntfysms.network.UrlValidator
 import `in`.ntfysms.service.SmsForwarderService
 import `in`.ntfysms.worker.ForwardingManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -239,7 +238,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val context = getApplication<Application>()
         val packageName = context.packageName
         val flat = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
-        return flat != null && flat.contains(packageName)
+        return flat != null && (flat.contains(packageName))
     }
 
     private fun saveCurrentSettings() {
