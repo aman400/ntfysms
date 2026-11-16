@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+    branches-ignore:
+      - '**'
   workflow_dispatch:
 
 jobs:
@@ -46,23 +48,11 @@ jobs:
           APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
           echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
 
-      - name: Create GitHub Release
+      - name: Attach APK to GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         with:
           files: ${{ env.APK_PATH }}
-          name: Release ${{ github.ref_name }}
-          body: |
-            ## NtfySMS Release ${{ github.ref_name }}
-            
-            ### Features & Updates
-            - Dynamic SMS & Push Notification Forwarding to ntfy / Gotify target nodes.
-            - Node-level pre-checks (Internet, Active VPN requirement, HTTP healthcheck ping).
-            - Custom regex message parsing and custom payload format templates.
-            - Manual retry & automatic real-time status notifications.
-            
-            ### Installation
-            Download and install `NtfySMS-v1.0.0.apk` below on your Android device (Android 8.0+ / API 26+).
           draft: false
           prerelease: false
         env:
