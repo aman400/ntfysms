@@ -1,7 +1,6 @@
 package `in`.ntfysms.ui
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.background
@@ -21,7 +20,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -52,11 +50,12 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import `in`.ntfysms.BuildConfig
 import `in`.ntfysms.data.DeliveryNode
 import `in`.ntfysms.data.ServerType
 import `in`.ntfysms.filter.MessageTemplateParser
+import androidx.core.net.toUri
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     viewModel: MainViewModel,
@@ -68,7 +67,6 @@ fun SettingsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
-    var showToken by remember { mutableStateOf(false) }
     var showGuideDialog by remember { mutableStateOf(false) }
     var editingNode by remember { mutableStateOf<DeliveryNode?>(null) }
     var showAddNodeDialog by remember { mutableStateOf(false) }
@@ -152,10 +150,10 @@ fun SettingsScreen(
                                     onClick = {
                                         try {
                                             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                                                data = Uri.parse("package:${context.packageName}")
+                                                data = "package:${context.packageName}".toUri()
                                             }
                                             context.startActivity(intent)
-                                        } catch (e: Exception) {
+                                        } catch (_: Exception) {
                                             context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
                                         }
                                     }
@@ -566,7 +564,29 @@ fun SettingsScreen(
                 }
             }
 
-            item { Spacer(modifier = Modifier.height(36.dp)) }
+            // Version Footer
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "NtfySMS v${BuildConfig.VERSION_NAME}",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+                    Text(
+                        text = "Min SDK 26 (Android 8.0+) • Target SDK 37",
+                        fontSize = 11.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(24.dp)) }
         }
 
         // Add / Edit Delivery Node Bottom Sheet
@@ -1011,9 +1031,10 @@ fun AddEditNodeBottomSheet(
             Button(
                 onClick = {
                     if (serverUrl.isNotBlank()) {
+                        val fallbackName = if (serverType == ServerType.GOTIFY) "Gotify Target Node" else "ntfy Target Node"
                         onSave(
                             initialNode.copy(
-                                name = if (name.isNotBlank()) name else (if (serverType == ServerType.GOTIFY) "Gotify Target Node" else "ntfy Target Node"),
+                                name = name.ifBlank { fallbackName },
                                 serverType = serverType,
                                 serverUrl = serverUrl.trim(),
                                 topic = topic.trim(),

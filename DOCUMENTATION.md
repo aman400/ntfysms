@@ -73,18 +73,75 @@ If you don't run a home server, use the free public server `https://ntfy.sh`:
 - **Topic**: Pick a long, unguessable topic string (e.g., `my-private-otp-channel-89102`).
 - **Subscribe**: Open `https://ntfy.sh/my-private-otp-channel-89102` in your browser or install the official ntfy app from Google Play / F-Droid and add the topic.
 
-#### 2. Self-Hosted ntfy via Docker
-Run ntfy on your VPS or home lab:
-```bash
-docker run -d \
-  --name ntfy \
-  -p 8080:80 \
-  -v /var/cache/ntfy:/var/cache/ntfy \
-  -v /etc/ntfy:/etc/ntfy \
-  binwiederhergestellt/ntfy serve
+#### 2. Docker Compose Deployment for ntfy
+Create a `docker-compose.yml` file on your server:
+
+```yaml
+version: '3.8'
+
+services:
+  ntfy:
+    image: binwiederhergestellt/ntfy:latest
+    container_name: ntfy
+    restart: unless-stopped
+    command:
+      - serve
+    environment:
+      - TZ=UTC
+    volumes:
+      - ./etc-ntfy:/etc/ntfy
+      - ./var-cache-ntfy:/var/cache/ntfy
+    ports:
+      - "8080:80"
 ```
+
+#### 3. ntfy Security Hardening (`/etc/ntfy/server.yml`)
+Secure your self-hosted ntfy server by disabling anonymous publishing, public account signups, and unneeded attachments:
+
+```yaml
+# /etc/ntfy/server.yml
+
+# 1. Base public URL
+base-url: "https://ntfy.example.com"
+
+# 2. Require authentication for all access
+auth-file: "/var/cache/ntfy/user.db"
+auth-default-access: "deny-all"
+
+# 3. Disable public signups
+enable-signup: false
+enable-login: true
+
+# 4. Disable attachments & visitor metrics for maximum privacy
+attachment-total-size-limit: "0"
+enable-metrics: false
+
+# 5. Rate limiting protections
+visitor-request-limit-burst: 60
+visitor-request-limit-replenish: "10s"
+```
+
+#### 4. Setting Up Write-Only & Read-Only ACL Topic Permissions
+For optimal security, configure topic ACL permissions so NtfySMS has **write-only** access, while your receiver devices have **read-only** access:
+
+```bash
+# 1. Create separate user accounts
+ntfy user add ntfysms_publisher
+ntfy user add ntfy_receiver
+
+# 2. Grant WRITE-ONLY permission on otp-* topics to NtfySMS app
+ntfy access ntfysms_publisher "otp-*" write-only
+
+# 3. Grant READ-ONLY permission on otp-* topics to Receiver App
+ntfy access ntfy_receiver "otp-*" read-only
+
+# 4. Generate Bearer Token for NtfySMS
+ntfy token add ntfysms_publisher
+```
+
 - **Server URL**: `http://192.168.1.50:8080` or `https://ntfy.home.arpa`
-- **Protected Topics**: If your self-hosted server uses access control, create an access token (`ntfy token add username`) and paste the `tk_...` token into the **Access Token** field in NtfySMS.
+- **Topic**: `otp-myfeed`
+- **Access Token**: Paste the generated `tk_...` token into the **Access Token** field in NtfySMS.
 
 ---
 
@@ -92,17 +149,30 @@ docker run -d \
 
 Gotify is an open-source push notification server designed for self-hosting.
 
-#### 1. Deploy Gotify via Docker
-```bash
-docker run -d \
-  --name gotify \
-  -p 8080:80 \
-  -v gotify_data:/app/data \
-  gotify/server
+#### 1. Deploy Gotify via Docker Compose
+Create a `docker-compose.yml` for Gotify:
+
+```yaml
+version: '3.8'
+
+services:
+  gotify:
+    image: gotify/server:latest
+    container_name: gotify
+    restart: unless-stopped
+    environment:
+      - GOTIFY_SERVER_PORT=80
+      - GOTIFY_DATABASE_DIALECT=sqlite3
+      - GOTIFY_DATABASE_CONNECTION=data/gotify.db
+      - GOTIFY_PASSWORSTRENGTH=10
+    volumes:
+      - ./gotify_data:/app/data
+    ports:
+      - "8081:80"
 ```
 
 #### 2. Generate an Application Token
-1. Open Gotify Web UI in your browser (`http://192.168.1.50:8080` or `https://gotify.example.com`).
+1. Open Gotify Web UI in your browser (`http://192.168.1.50:8081` or `https://gotify.example.com`).
 2. Log in with your admin account.
 3. Click **Apps** in the top navigation bar → Click **Create Application**.
 4. Enter name: `NtfySMS` → Click **CREATE**.
@@ -113,6 +183,15 @@ In NtfySMS, tap **+ Add Node** → Select **🔔 Gotify**:
 - **Server URL**: `https://gotify.example.com`
 - **App Token**: Paste the generated `X-Gotify-Key` token (`A1b2C3d4E5f6`).
 - Tap **Save Node**.
+
+---
+
+### Server Security Considerations & Best Practices
+
+1. **Reverse Proxy & Mandatory TLS/HTTPS**: Never expose raw HTTP ports to the open internet. Reverse proxy via Caddy, Nginx Proxy Manager, or Traefik to enforce TLS encryption.
+2. **Private Network Binding (Tailscale / WireGuard)**: Bind ntfy/Gotify to private Tailscale (`100.x.x.x`) or local IP ranges (`192.168.x.x`), and configure NtfySMS's **Require Active VPN** pre-check.
+3. **Least-Privilege ACL Tokens**: Never use admin credentials for forwarding. Use write-only tokens for NtfySMS and read-only tokens for receiver clients.
+4. **Disable Anonymous Features**: Set `auth-default-access: "deny-all"` in ntfy to block unauthorized publishing.
 
 ---
 

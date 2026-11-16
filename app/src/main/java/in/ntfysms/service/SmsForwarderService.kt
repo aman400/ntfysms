@@ -74,17 +74,15 @@ class SmsForwarderService : Service() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "SMS Forwarder Service",
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Shows status while SMS OTP forwarding is enabled"
-            }
-            val manager = getSystemService(NotificationManager::class.java)
-            manager?.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "SMS Forwarder Service",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Shows status while SMS OTP forwarding is enabled"
         }
+        val manager = getSystemService(NotificationManager::class.java)
+        manager?.createNotificationChannel(channel)
     }
 
     companion object {
@@ -95,15 +93,11 @@ class SmsForwarderService : Service() {
 
         fun startService(context: Context) {
             val intent = Intent(context, SmsForwarderService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startForegroundService(intent)
         }
 
         fun updateNotificationStatus(context: Context, title: String, text: String) {
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            val manager = context.getSystemService(NotificationManager::class.java)
                 ?: return
 
             val openAppIntent = Intent(context, MainActivity::class.java).apply {
