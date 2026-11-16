@@ -3,36 +3,56 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NtfySMS — Personal OTP SMS & Notification Forwarder</title>
-  <meta name="description" content="Open-source Android application for forwarding OTP SMS and push notifications to ntfy or Gotify servers with node-level pre-checks and VPN support.">
+  <title>NtfySMS — Personal OTP SMS & Push Notification Forwarder for Android</title>
+  <meta name="description" content="Open-source Android app to forward incoming OTP SMS and notifications to ntfy or Gotify servers with node-level pre-checks, VPN requirement, and HTTP healthchecks.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0b0f19;
-      --surface: #131b2e;
-      --surface-border: #1e293b;
+      --bg: #070a12;
+      --card-bg: rgba(18, 25, 41, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --card-hover: rgba(16, 185, 129, 0.25);
       --primary: #10b981;
-      --primary-hover: #059669;
-      --accent: #0284c7;
+      --primary-light: #34d399;
+      --gotify: #0284c7;
+      --accent: #38bdf8;
       --text: #f8fafc;
       --text-muted: #94a3b8;
-      --card-bg: #1e293b;
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
       font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
       background: var(--bg);
       color: var(--text);
       line-height: 1.6;
-      padding: 0;
-      margin: 0;
+      overflow-x: hidden;
+      background-image:
+        radial-gradient(circle at 15% 15%, rgba(16, 185, 129, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 85% 65%, rgba(2, 132, 199, 0.12) 0%, transparent 40%);
+      background-attachment: fixed;
     }
-    header {
-      max-width: 1100px;
+
+    .container {
+      max-width: 1140px;
       margin: 0 auto;
-      padding: 24px 20px;
+      padding: 0 24px;
+    }
+
+    /* Header */
+    header {
+      padding: 24px 0;
+      border-bottom: 1px solid var(--card-border);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(7, 10, 18, 0.8);
+    }
+    .nav {
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -47,208 +67,408 @@
     }
     .logo-badge {
       background: linear-gradient(135deg, #10b981, #0284c7);
-      padding: 6px 12px;
+      padding: 6px 14px;
       border-radius: 8px;
       color: #fff;
+      font-weight: 800;
       font-size: 0.9rem;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
     }
+    .nav-links {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+    .nav-link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+    .nav-link:hover { color: var(--text); }
+
+    /* Hero Section */
     .hero {
-      max-width: 1100px;
-      margin: 60px auto;
-      padding: 0 20px;
+      padding: 100px 0 60px 0;
       text-align: center;
+      position: relative;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 30px;
+      color: var(--primary-light);
+      font-size: 0.85rem;
+      font-weight: 700;
+      margin-bottom: 24px;
     }
     .hero h1 {
-      font-size: 3.25rem;
+      font-size: 3.75rem;
       font-weight: 800;
-      line-height: 1.15;
-      letter-spacing: -1.5px;
-      background: linear-gradient(135deg, #ffffff 40%, #94a3b8);
+      line-height: 1.1;
+      letter-spacing: -2px;
+      margin-bottom: 24px;
+      background: linear-gradient(135deg, #ffffff 30%, #94a3b8);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
-      margin-bottom: 20px;
     }
     .hero p {
       font-size: 1.25rem;
       color: var(--text-muted);
-      max-width: 720px;
-      margin: 0 auto 36px auto;
+      max-width: 760px;
+      margin: 0 auto 40px auto;
+      font-weight: 400;
     }
-    .hero-buttons {
+    .hero-actions {
       display: flex;
       justify-content: center;
       gap: 16px;
       flex-wrap: wrap;
     }
+
+    /* Buttons */
     .btn {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 14px 28px;
+      gap: 10px;
+      padding: 16px 32px;
       border-radius: 12px;
       font-weight: 700;
       font-size: 1rem;
       text-decoration: none;
-      transition: all 0.2s ease;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
     }
     .btn-primary {
-      background: var(--primary);
+      background: linear-gradient(135deg, #10b981, #059669);
       color: #042f2e;
+      box-shadow: 0 4px 24px rgba(16, 185, 129, 0.35);
     }
     .btn-primary:hover {
-      background: var(--primary-hover);
       transform: translateY(-2px);
+      box-shadow: 0 8px 32px rgba(16, 185, 129, 0.5);
     }
     .btn-secondary {
       background: var(--surface);
       color: var(--text);
-      border: 1px solid var(--surface-border);
+      border: 1px solid var(--card-border);
     }
     .btn-secondary:hover {
       border-color: var(--primary);
       transform: translateY(-2px);
+      background: rgba(30, 41, 59, 0.8);
     }
-    .features {
-      max-width: 1100px;
-      margin: 80px auto;
-      padding: 0 20px;
+
+    /* Pipeline Graphic Showcase */
+    .pipeline-preview {
+      margin: 60px auto;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 32px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
     }
-    .features h2 {
-      font-size: 2rem;
+    .pipeline-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 24px;
+    }
+    .pipeline-flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      align-items: center;
+    }
+    .flow-node {
+      background: #0f172a;
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: left;
+    }
+    .flow-node-header {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--primary-light);
+      margin-bottom: 6px;
+    }
+    .flow-node-body {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .flow-arrow {
+      font-size: 1.5rem;
+      color: var(--primary);
+      font-weight: 800;
       text-align: center;
-      margin-bottom: 40px;
-      letter-spacing: -0.5px;
     }
+
+    /* Features Grid */
+    .section {
+      padding: 80px 0;
+    }
+    .section-title {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+    .section-title h2 {
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: -1px;
+      margin-bottom: 12px;
+    }
+    .section-title p {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+    }
+
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1f));
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: 24px;
     }
     .card {
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
       border-radius: 16px;
-      padding: 28px;
-      transition: border-color 0.2s;
+      padding: 32px;
+      backdrop-filter: blur(12px);
+      transition: all 0.25s ease;
     }
     .card:hover {
       border-color: rgba(16, 185, 129, 0.4);
+      transform: translateY(-4px);
     }
     .card-icon {
-      font-size: 2rem;
-      margin-bottom: 16px;
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: rgba(16, 185, 129, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      margin-bottom: 20px;
     }
     .card h3 {
       font-size: 1.25rem;
       font-weight: 700;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
     }
     .card p {
       color: var(--text-muted);
       font-size: 0.95rem;
+      line-height: 1.6;
     }
-    .code-block {
+
+    /* Code Snippet Box */
+    .tab-box {
+      background: #090d16;
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-top: 40px;
+    }
+    .tab-header {
+      display: flex;
       background: #0f172a;
-      border-radius: 8px;
-      padding: 14px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.85rem;
-      color: #38bdf8;
-      overflow-x: auto;
-      margin-top: 12px;
+      border-bottom: 1px solid var(--card-border);
     }
+    .tab-btn {
+      padding: 14px 24px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-weight: 700;
+      font-size: 0.85rem;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      color: var(--primary-light);
+      border-bottom-color: var(--primary);
+      background: rgba(16, 185, 129, 0.05);
+    }
+    .tab-content {
+      padding: 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      color: var(--accent);
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* Footer */
     footer {
-      max-width: 1100px;
-      margin: 80px auto 40px auto;
-      padding: 20px;
+      padding: 60px 0 40px 0;
+      border-top: 1px solid var(--card-border);
       text-align: center;
       color: var(--text-muted);
-      border-top: 1px solid var(--surface-border);
       font-size: 0.9rem;
+    }
+    footer a {
+      color: var(--primary-light);
+      text-decoration: none;
+    }
+
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 2.5rem; }
+      .pipeline-flow { grid-template-columns: 1fr; }
+      .flow-arrow { transform: rotate(90deg); margin: 8px 0; }
     }
   </style>
 </head>
 <body>
 
   <header>
-    <div class="logo">
-      <span class="logo-badge">NtfySMS</span>
-      <span>Android OTP Forwarder</span>
+    <div class="container nav">
+      <div class="logo">
+        <span class="logo-badge">NtfySMS</span>
+        <span>Android OTP Forwarder</span>
+      </div>
+      <div class="nav-links">
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#pipeline" class="nav-link">Architecture</a>
+        <a href="#code" class="nav-link">Curl Examples</a>
+        <a href="https://github.com/aman/NtfySMS" class="btn btn-secondary" style="padding: 10px 20px; font-size: 0.85rem;" target="_blank">GitHub Repo</a>
+      </div>
     </div>
-    <a href="https://github.com/aman/NtfySMS" class="btn btn-secondary" target="_blank">GitHub Repository</a>
   </header>
 
   <section class="hero">
-    <h1>Forward OTP SMS & Notifications directly to ntfy & Gotify</h1>
-    <p>A personal-use, privacy-focused Android application with node-level pre-checks, VPN throttling, custom HTTP healthcheck pings, and dynamic payload templates.</p>
+    <div class="container">
+      <div class="badge">🚀 Open Source Android Application — Version 1.0.0</div>
+      <h1>Forward OTP SMS & Notifications to ntfy & Gotify</h1>
+      <p>Privacy-focused Android forwarder featuring node-level pre-checks, VPN throttling, custom HTTP healthcheck pings, and dynamic regex payload templates.</p>
 
-    <div class="hero-buttons">
-      <a href="https://github.com/aman/NtfySMS/releases/latest" class="btn btn-primary">
-        ⚡ Download Latest Release (APK)
-      </a>
-      <a href="https://github.com/aman/NtfySMS#readme" class="btn btn-secondary">
-        📖 Read Setup Docs
-      </a>
-    </div>
-  </section>
-
-  <section class="features">
-    <h2>Powerful Capabilities</h2>
-    <div class="grid">
-
-      <div class="card">
-        <div class="card-icon">🚀</div>
-        <h3>ntfy & Gotify Target Nodes</h3>
-        <p>Configure multiple target nodes for public ntfy.sh servers, self-hosted ntfy instances, or Gotify notification servers with bearer tokens.</p>
+      <div class="hero-actions">
+        <a href="https://github.com/aman/NtfySMS/releases/latest" class="btn btn-primary">
+          ⚡ Download Release APK (v1.0.0)
+        </a>
+        <a href="https://github.com/aman/NtfySMS#readme" class="btn btn-secondary" target="_blank">
+          📖 Read Documentation
+        </a>
       </div>
 
-      <div class="card">
-        <div class="card-icon">🔒</div>
-        <h3>Node-Level VPN & Pre-Checks</h3>
-        <p>Require active Tailscale, WireGuard, or OpenVPN connections per target node. Unsent messages stay queued and auto-execute when connected.</p>
-      </div>
-
-      <div class="card">
-        <div class="card-icon">🩺</div>
-        <h3>Custom HTTP Healthcheck Pings</h3>
-        <p>Ping target server health endpoints using GET, HEAD, or POST with custom HTTP headers and expected HTTP status codes before transmitting payloads.</p>
-      </div>
-
-      <div class="card">
-        <div class="card-icon">🔍</div>
-        <h3>Regex Variable Capture</h3>
-        <p>Extract OTP codes and variables from SMS body (${code}, ${otp}, ${group1}) and sender header (${senderGroup1}) with interactive live preview testing.</p>
-      </div>
-
-      <div class="card">
-        <div class="card-icon">🛡️</div>
-        <h3>Zero OTP Local Persistence</h3>
-        <p>OTP codes and sensitive message texts are deleted from the local SQLite database immediately upon delivery or expiry to satisfy security requirements.</p>
-      </div>
-
-      <div class="card">
-        <div class="card-icon">📱</div>
-        <h3>Quick Settings QS Tile</h3>
-        <p>Toggle SMS forwarding ON/OFF directly from your Android notification shade with real-time status updates.</p>
+      <!-- Pipeline Interactive Showcase -->
+      <div class="pipeline-preview" id="pipeline">
+        <div class="pipeline-title">Visual Dispatch Pipeline Flow</div>
+        <div class="pipeline-flow">
+          <div class="flow-node">
+            <div class="flow-node-header">📱 1. Message Input</div>
+            <div class="flow-node-body">Telephony SMS Broadcast + App Notifications</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node">
+            <div class="flow-node-header">🔍 2. Filter & Regex Extractor</div>
+            <div class="flow-node-body">Sender allowlist + regex variable parsing (${code})</div>
+          </div>
+          <div class="flow-arrow">→</div>
+          <div class="flow-node">
+            <div class="flow-node-header">🚀 3. Multi-Node Dispatch</div>
+            <div class="flow-node-body">ntfy / Gotify targets with VPN & healthcheck pre-checks</div>
+          </div>
+        </div>
       </div>
 
     </div>
   </section>
 
-  <section class="features">
-    <h2>Quick Verification Example</h2>
-    <div class="card" style="max-width: 800px; margin: 0 auto;">
-      <h3>Test Payload Delivery</h3>
-      <p>Simulate sending an OTP SMS payload directly via terminal or emulator:</p>
-      <div class="code-block">
-        curl -d "[HDFCBK] OTP Code: 482910" https://ntfy.sh/my-secret-otp-topic
+  <!-- Features Grid -->
+  <section class="section" id="features">
+    <div class="container">
+      <div class="section-title">
+        <h2>Engineered for Reliability & Security</h2>
+        <p>Built with modern Android best practices (Kotlin, Jetpack Compose Material 3, Room DB & WorkManager).</p>
       </div>
+
+      <div class="grid">
+        <div class="card">
+          <div class="card-icon">🚀</div>
+          <h3>Multi-Node Target Architecture</h3>
+          <p>Configure multiple delivery destinations (`DeliveryNode`) supporting ntfy text/plain POST and Gotify JSON payloads with app tokens.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🔒</div>
+          <h3>Node-Level VPN & Pre-Checks</h3>
+          <p>Require active Tailscale, WireGuard, or OpenVPN connection per target node. Messages remain queued and auto-execute when connected.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🩺</div>
+          <h3>Custom HTTP Request Healthchecks</h3>
+          <p>Ping custom health endpoints (GET/HEAD/POST) with custom HTTP headers and expected HTTP status codes before dispatching payloads.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">⚡</div>
+          <h3>Reactive Dynamic Auto-Execution</h3>
+          <p>Background 10-second polling loop and network callback listener automatically deliver queued messages the instant pre-conditions pass.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🔍</div>
+          <h3>Regex Parsing & Custom Templates</h3>
+          <p>Extract OTP codes and variables (${code}, ${otp}, ${group1}) with customizable format templates (e.g. `[${sender}] Code: ${code}`).</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🛡️</div>
+          <h3>Zero OTP Persistence</h3>
+          <p>OTP codes and sensitive message texts are deleted from the local SQLite database immediately upon delivery or expiry to satisfy security requirements.</p>
+        </div>
+      </div>
+
+      <!-- Tabbed Code Box -->
+      <div class="tab-box" id="code">
+        <div class="tab-header">
+          <button class="tab-btn active" onclick="switchTab('ntfy')">🚀 ntfy Curl Request</button>
+          <button class="tab-btn" onclick="switchTab('gotify')">🔔 Gotify API Payload</button>
+          <button class="tab-btn" onclick="switchTab('adb')">📱 Emulator ADB SMS Test</button>
+        </div>
+        <div class="tab-content" id="tab-code">curl -d "[VM-HDFCBK] OTP Code: 482910" https://ntfy.sh/my-secret-otp-topic</div>
+      </div>
+
     </div>
   </section>
 
   <footer>
-    <p>NtfySMS — Open Source Android App built with Kotlin & Jetpack Compose. Licensed under MIT.</p>
+    <div class="container">
+      <p>NtfySMS — Open Source Android App built in Kotlin. Released under MIT License.</p>
+      <p style="margin-top: 8px;">
+        <a href="https://github.com/aman/NtfySMS" target="_blank">GitHub Repository</a> •
+        <a href="https://github.com/aman/NtfySMS/releases" target="_blank">Releases</a> •
+        <a href="https://github.com/aman/NtfySMS/blob/main/RELEASE_GUIDE.md" target="_blank">Release Guide</a>
+      </p>
+    </div>
   </footer>
 
+  <script>
+    function switchTab(type) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+
+      const codeBox = document.getElementById('tab-code');
+      if (type === 'ntfy') {
+        codeBox.textContent = 'curl -d "[VM-HDFCBK] OTP Code: 482910" https://ntfy.sh/my-secret-otp-topic';
+      } else if (type === 'gotify') {
+        codeBox.textContent = 'curl -X POST "https://gotify.example.com/message?token=A1b2C3d4E5f6" \\\n  -F "title=NtfySMS OTP" \\\n  -F "message=[VM-HDFCBK] Code: 482910"';
+      } else if (type === 'adb') {
+        codeBox.textContent = 'adb emu sms send VM-HDFCBK "Your OTP for transaction of Rs 500 is 482910"';
+      }
+    }
+  </script>
 </body>
 </html>
