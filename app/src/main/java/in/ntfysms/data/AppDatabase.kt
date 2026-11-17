@@ -5,10 +5,17 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [MessageEntity::class], version = 1, exportSchema = false)
+@Database(
+    entities = [MessageEntity::class, WorkflowEntity::class, WorkflowExecutionLogEntity::class, CredentialEntity::class, PreconditionEntity::class],
+    version = 4,
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun messageDao(): MessageDao
+    abstract fun workflowDao(): WorkflowDao
+    abstract fun credentialDao(): CredentialDao
+    abstract fun preconditionDao(): PreconditionDao
 
     companion object {
         @Volatile
@@ -20,7 +27,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "ntfy_sms_db"
-                ).build()
+                )
+                    .fallbackToDestructiveMigration()
+                    .build()
                 INSTANCE = instance
                 instance
             }

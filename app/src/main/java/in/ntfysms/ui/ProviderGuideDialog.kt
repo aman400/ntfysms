@@ -12,17 +12,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import `in`.ntfysms.data.ServerType
+import `in`.ntfysms.ui.components.NoSwipeBottomSheet
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -43,26 +41,23 @@ fun ProviderGuideBottomSheet(
     initialServerType: String = ServerType.NTFY,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedType by remember { mutableStateOf(initialServerType) }
     val isGotify = selectedType == ServerType.GOTIFY
 
-    ModalBottomSheet(
+    NoSwipeBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        dragHandle = { BottomSheetDefaults.DragHandle() },
-        containerColor = MaterialTheme.colorScheme.surface
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(bottom = 12.dp)
         ) {
             // Header
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -83,46 +78,65 @@ fun ProviderGuideBottomSheet(
                 }
             }
 
-            // Segmented Provider Selector
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                if (!isGotify) {
-                    Button(onClick = { selectedType = ServerType.NTFY }, modifier = Modifier.weight(1f)) {
-                        Text("🚀 ntfy Setup", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                // Segmented Provider Selector
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (!isGotify) {
+                        Button(onClick = { selectedType = ServerType.NTFY }, modifier = Modifier.weight(1f)) {
+                            Text("🚀 ntfy Setup", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        OutlinedButton(onClick = { selectedType = ServerType.GOTIFY }, modifier = Modifier.weight(1f)) {
+                            Text("🔔 Gotify Setup", fontSize = 12.sp)
+                        }
+                    } else {
+                        OutlinedButton(onClick = { selectedType = ServerType.NTFY }, modifier = Modifier.weight(1f)) {
+                            Text("🚀 ntfy Setup", fontSize = 12.sp)
+                        }
+                        Button(onClick = { selectedType = ServerType.GOTIFY }, modifier = Modifier.weight(1f)) {
+                            Text("🔔 Gotify Setup", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
-                    OutlinedButton(onClick = { selectedType = ServerType.GOTIFY }, modifier = Modifier.weight(1f)) {
-                        Text("🔔 Gotify Setup", fontSize = 12.sp)
-                    }
+                }
+
+                // Guide Body Content
+                if (isGotify) {
+                    GotifySetupGuideContent()
                 } else {
-                    OutlinedButton(onClick = { selectedType = ServerType.NTFY }, modifier = Modifier.weight(1f)) {
-                        Text("🚀 ntfy Setup", fontSize = 12.sp)
-                    }
-                    Button(onClick = { selectedType = ServerType.GOTIFY }, modifier = Modifier.weight(1f)) {
-                        Text("🔔 Gotify Setup", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
+                    NtfySetupGuideContent()
                 }
             }
 
-            // Guide Body Content
-            if (isGotify) {
-                GotifySetupGuideContent()
-            } else {
-                NtfySetupGuideContent()
-            }
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Sticky Bottom Action Button
-            Button(
-                onClick = onDismiss,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 12.dp)
+            androidx.compose.material3.Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                tonalElevation = 6.dp
             ) {
-                Text("Got It!", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Got It!", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
+                }
             }
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }

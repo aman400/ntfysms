@@ -1,24 +1,52 @@
 package `in`.ntfysms.ui
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import `in`.ntfysms.data.AppDatabase
 import `in`.ntfysms.data.AppSettings
+import `in`.ntfysms.data.CredentialRepository
+import `in`.ntfysms.data.DefaultWorkflowInitializer
 import `in`.ntfysms.data.DeliveryNode
 import `in`.ntfysms.data.EncryptedSettingsRepository
 import `in`.ntfysms.data.MessageEntity
+import `in`.ntfysms.data.PreconditionEntity
+import `in`.ntfysms.data.PreconditionRepository
+import `in`.ntfysms.data.RoomCredentialRepository
+import `in`.ntfysms.data.RoomPreconditionRepository
+import `in`.ntfysms.data.RoomWorkflowRepository
+import `in`.ntfysms.data.WorkflowExecutionLogEntity
+import `in`.ntfysms.data.WorkflowRepository
+import `in`.ntfysms.domain.engine.ExecutionContext
+import `in`.ntfysms.domain.engine.NodeExecutionStep
+import `in`.ntfysms.domain.engine.NodeStepState
+import `in`.ntfysms.domain.engine.PreconditionEvaluator
+import org.json.JSONObject
+import `in`.ntfysms.domain.engine.WorkflowEngine
+import `in`.ntfysms.domain.engine.WorkflowExecutionResult
+import `in`.ntfysms.domain.model.Credential
+import `in`.ntfysms.domain.model.NodeType
+import `in`.ntfysms.domain.model.Workflow
 import `in`.ntfysms.filter.SmsFilter
 import `in`.ntfysms.service.SmsForwarderService
 import `in`.ntfysms.worker.ForwardingManager
+import `in`.ntfysms.domain.engine.PreconditionResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 data class MainUiState(
     val nodes: List<DeliveryNode> = emptyList(),
@@ -50,9 +78,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val settingsRepo = EncryptedSettingsRepository(application)
     private val db = AppDatabase.getInstance(application)
     private val forwardingManager = ForwardingManager.getInstance(application)
+    val workflowRepository: WorkflowRepository = RoomWorkflowRepository(db.workflowDao())
+    val credentialRepository: CredentialRepository = RoomCredentialRepository(db.credentialDao())
+    val preconditionRepository: PreconditionRepository = RoomPreconditionRepository(db.preconditionDao())
+    private val workflowInitializer = DefaultWorkflowInitializer(workflowRepository)
 
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
+
+    val workflows: StateFlow<List<Workflow>> = workflowRepository.getAllWorkflowsFlow()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val credentials: StateFlow<List<Credential>> = credentialRepository.getAllCredentialsFlow()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val preconditions: StateFlow<List<PreconditionEntity>> = preconditionRepository.getAllPreconditionsFlow()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val executionLogs: StateFlow<List<WorkflowExecutionLogEntity>> = workflowRepository.getRecentExecutionLogsFlow(50)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     val recentEvents: StateFlow<List<MessageEntity>> = db.messageDao()
         .getRecentEventsFlow(20)
@@ -73,6 +133,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         loadSettings()
         checkPermissionsAndStatus()
+        viewModelScope.launch(Dispatchers.IO) {
+            workflowInitializer.checkAndInitialize()
+        }
     }
 
     fun loadSettings() {
@@ -221,11 +284,237 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun saveWorkflow(workflow: Workflow) {
+        viewModelScope.launch(Dispatchers.IO) {
+            workflowRepository.saveWorkflow(workflow)
+        }
+    }
+
+    fun setWorkflowEnabled(id: String, enabled: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val workflow = workflowRepository.getWorkflowById(id)
+            if (workflow != null && enabled) {
+                val hasNotifTrigger = workflow.nodes.any { it.type == NodeType.NOTIFICATION_TRIGGER }
+                val hasNotifPerm = checkNotificationListenerPermissionInternal()
+                if (hasNotifTrigger && !hasNotifPerm) {
+                    // Do not allow enabling
+                    workflowRepository.setWorkflowEnabled(id, false)
+                    return@launch
+                }
+            }
+            workflowRepository.setWorkflowEnabled(id, enabled)
+        }
+    }
+
+    fun deleteWorkflow(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            workflowRepository.deleteWorkflow(id)
+        }
+    }
+
+    fun getLogsForWorkflow(workflowId: String): Flow<List<WorkflowExecutionLogEntity>> {
+        return workflowRepository.getLogsForWorkflowFlow(workflowId)
+    }
+
+    fun clearLogsForWorkflow(workflowId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            workflowRepository.clearLogsForWorkflow(workflowId)
+        }
+    }
+
+    fun saveCredential(credential: Credential) {
+        viewModelScope.launch(Dispatchers.IO) {
+            credentialRepository.saveCredential(credential)
+        }
+    }
+
+    fun deleteCredential(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            credentialRepository.deleteCredential(id)
+        }
+    }
+
+    fun savePrecondition(precondition: PreconditionEntity) {
+        viewModelScope.launch(Dispatchers.IO) {
+            preconditionRepository.savePrecondition(precondition)
+        }
+    }
+
+    fun deletePrecondition(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            preconditionRepository.deletePrecondition(id)
+        }
+    }
+
+    fun testPreconditionWithProgress(
+        entity: PreconditionEntity,
+        onStepUpdate: (List<NodeExecutionStep>) -> Unit,
+        onResult: (PreconditionResult) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val context = getApplication<Application>()
+            val evaluator = PreconditionEvaluator(context)
+            val domainPrecondition = entity.toDomain()
+            val result = evaluator.evaluate(domainPrecondition) { steps ->
+                viewModelScope.launch(Dispatchers.Main) {
+                    onStepUpdate(steps)
+                }
+            }
+            withContext(Dispatchers.Main) {
+                onResult(result)
+            }
+        }
+    }
+
+    fun testPrecondition(entity: PreconditionEntity, onResult: (PreconditionResult) -> Unit) {
+        testPreconditionWithProgress(entity, {}, onResult)
+    }
+
+    fun testRunWorkflowWithProgress(
+        workflow: Workflow,
+        onProgressUpdate: (List<NodeExecutionStep>) -> Unit,
+        onResult: (WorkflowExecutionResult) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val context = getApplication<Application>()
+            val evaluator = PreconditionEvaluator(context)
+            val engine = WorkflowEngine(evaluator, credentialRepository)
+
+            val triggerNode = workflow.nodes.firstOrNull {
+                it.type == NodeType.SMS_TRIGGER || it.type == NodeType.NOTIFICATION_TRIGGER || it.type == NodeType.MANUAL_TRIGGER
+            }
+            val triggerConfig = try { JSONObject(triggerNode?.configJson ?: "{}") } catch (_: Exception) { JSONObject() }
+
+            val testContextMap = mutableMapOf<String, Any>()
+            when (triggerNode?.type) {
+                NodeType.SMS_TRIGGER -> {
+                    testContextMap["sender"] = triggerConfig.optString("testSender", "+15551234567")
+                    testContextMap["body"] = triggerConfig.optString("testBody", "Your OTP verification code for bank login is 849201")
+                }
+                NodeType.NOTIFICATION_TRIGGER -> {
+                    testContextMap["package_name"] = triggerConfig.optString("testPackageName", "com.example.bankapp")
+                    testContextMap["title"] = triggerConfig.optString("testTitle", "Bank Alert: OTP Code")
+                    testContextMap["text"] = triggerConfig.optString("testText", "Your login code is 849201")
+                    testContextMap["body"] = triggerConfig.optString("testText", "Your login code is 849201")
+                }
+                NodeType.MANUAL_TRIGGER -> {
+                    testContextMap["sender"] = "ManualTrigger"
+                    testContextMap["body"] = triggerConfig.optString("testBody", "Test manual payload data 849201")
+                }
+                else -> {
+                    testContextMap["sender"] = "+15551234567"
+                    testContextMap["body"] = "Your OTP verification code for bank login is 849201"
+                }
+            }
+            testContextMap["received_at"] = System.currentTimeMillis()
+
+            val execContext = ExecutionContext(testContextMap)
+
+            val result = engine.executeWorkflowWithProgress(
+                workflow = workflow,
+                context = execContext,
+                appContext = context,
+                onStepUpdate = { steps ->
+                    viewModelScope.launch(Dispatchers.Main) {
+                        onProgressUpdate(steps)
+                    }
+                }
+            )
+
+            val logMsg = when (result) {
+                is WorkflowExecutionResult.Success -> "✅ Success!\n" + result.logs.joinToString("\n")
+                is WorkflowExecutionResult.PreconditionFailed -> "⏳ Precondition Failed: ${result.reason}\n" + result.logs.joinToString("\n")
+                is WorkflowExecutionResult.Failed -> "❌ Failed: ${result.reason}\n" + result.logs.joinToString("\n")
+            }
+
+            val logEntity = WorkflowExecutionLogEntity(
+                id = UUID.randomUUID().toString(),
+                workflowId = workflow.id,
+                status = when (result) {
+                    is WorkflowExecutionResult.Success -> "SUCCESS"
+                    is WorkflowExecutionResult.PreconditionFailed -> "PRECONDITION_FAILED"
+                    is WorkflowExecutionResult.Failed -> "FAILED"
+                },
+                timestamp = System.currentTimeMillis(),
+                messageId = null,
+                logs = logMsg,
+                errorReason = when (result) {
+                    is WorkflowExecutionResult.Success -> null
+                    is WorkflowExecutionResult.PreconditionFailed -> result.reason
+                    is WorkflowExecutionResult.Failed -> result.reason
+                }
+            )
+            workflowRepository.saveExecutionLog(logEntity)
+
+            withContext(Dispatchers.Main) {
+                onResult(result)
+            }
+        }
+    }
+
+    fun testRunWorkflow(workflow: Workflow, onResult: (String) -> Unit) {
+        testRunWorkflowWithProgress(
+            workflow = workflow,
+            onProgressUpdate = {},
+            onResult = { result ->
+                val logMsg = when (result) {
+                    is WorkflowExecutionResult.Success -> "✅ Success!\n" + result.logs.joinToString("\n")
+                    is WorkflowExecutionResult.PreconditionFailed -> "⏳ Precondition Failed: ${result.reason}\n" + result.logs.joinToString("\n")
+                    is WorkflowExecutionResult.Failed -> "❌ Failed: ${result.reason}\n" + result.logs.joinToString("\n")
+                }
+                onResult(logMsg)
+            }
+        )
+    }
+
     fun checkPermissionsAndStatus() {
+        val context = getApplication<Application>()
+        val hasNotifPerm = checkNotificationListenerPermissionInternal()
         _uiState.value = _uiState.value.copy(
             isBatteryOptimized = checkBatteryOptimizedInternal(),
-            hasNotificationListenerPermission = checkNotificationListenerPermissionInternal()
+            hasNotificationListenerPermission = hasNotifPerm
         )
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentWorkflows = workflowRepository.getActiveWorkflows()
+            currentWorkflows.forEach { wf ->
+                val notifTrigger = wf.nodes.find { it.type == NodeType.NOTIFICATION_TRIGGER }
+                if (notifTrigger != null && wf.isEnabled) {
+                    val config = try { JSONObject(notifTrigger.configJson) } catch (_: Exception) { JSONObject() }
+                    val pkgFilter = config.optString("packageFilter", ".*")
+                    val isInstalled = `in`.ntfysms.ui.workflows.AppListHelper.isAppInstalled(context, pkgFilter)
+
+                    if (!hasNotifPerm || !isInstalled) {
+                        workflowRepository.setWorkflowEnabled(wf.id, false)
+                        if (!isInstalled && pkgFilter != ".*" && !pkgFilter.contains("*")) {
+                            postUninstalledAppNotification(context, wf.name, pkgFilter)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun postUninstalledAppNotification(context: Context, workflowName: String, packageName: String) {
+        try {
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channelId = "ntfy_sms_system_alerts"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(channelId, "System & Security Alerts", NotificationManager.IMPORTANCE_HIGH)
+                nm.createNotificationChannel(channel)
+            }
+
+            val appLabel = `in`.ntfysms.ui.workflows.AppListHelper.getAppNameForPackage(context, packageName)
+            val notification = androidx.core.app.NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(`in`.ntfysms.R.drawable.ic_notification)
+                .setContentTitle("⚠️ Workflow Disabled: App Uninstalled")
+                .setContentText("Target app '$appLabel' is uninstalled. Workflow '$workflowName' has been disabled.")
+                .setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText("Target app '$appLabel' ($packageName) is not installed on this device. Workflow '$workflowName' was automatically disabled to prevent errors."))
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
+                .setAutoCancel(true)
+                .build()
+
+            nm.notify(workflowName.hashCode(), notification)
+        } catch (_: Exception) {}
     }
 
     private fun checkBatteryOptimizedInternal(): Boolean {

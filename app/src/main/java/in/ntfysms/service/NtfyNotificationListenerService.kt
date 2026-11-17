@@ -3,25 +3,26 @@ package `in`.ntfysms.service
 import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
-import `in`.ntfysms.data.EncryptedSettingsRepository
-import `in`.ntfysms.filter.SmsFilter
+import `in`.ntfysms.data.AppDatabase
+import `in`.ntfysms.data.DefaultWorkflowInitializer
+import `in`.ntfysms.data.RoomCredentialRepository
+import `in`.ntfysms.data.RoomWorkflowRepository
+import `in`.ntfysms.data.WorkflowExecutionLogEntity
+import `in`.ntfysms.domain.engine.ExecutionContext
+import `in`.ntfysms.domain.engine.PreconditionEvaluator
+import `in`.ntfysms.domain.engine.WorkflowEngine
+import `in`.ntfysms.domain.engine.WorkflowExecutionResult
 import `in`.ntfysms.worker.ForwardingManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 class NtfyNotificationListenerService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
-
-        // Skip notifications from NtfySMS itself
         if (sbn.packageName == packageName) return
-
-        val settingsRepo = EncryptedSettingsRepository(applicationContext)
-        val settings = settingsRepo.getSettings()
-
-        if (!settings.isEnabled || !settings.forwardNotifications) return
 
         val extras = sbn.notification?.extras ?: return
 
@@ -36,22 +37,58 @@ class NtfyNotificationListenerService : NotificationListenerService() {
 
         val sender = if (!rawTitle.isNullOrBlank()) rawTitle else sbn.packageName
 
-        val shouldForward = SmsFilter.shouldForward(
-            sender = sender,
-            body = text,
-            allowlist = settings.allowlistItems,
-            keywordRegexStr = settings.keywordRegex
-        )
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val db = AppDatabase.getInstance(applicationContext)
+                val workflowRepository = RoomWorkflowRepository(db.workflowDao())
+                val credentialRepository = RoomCredentialRepository(db.credentialDao())
 
-        if (shouldForward) {
-            CoroutineScope(Dispatchers.IO).launch {
-                try {
-                    val manager = ForwardingManager.getInstance(applicationContext)
-                    manager.enqueueIncomingSms(sender = sender, body = text)
-                } catch (e: Exception) {
-                    // Ignore service exceptions
+                DefaultWorkflowInitializer(workflowRepository).checkAndInitialize()
+
+                val activeWorkflows = workflowRepository.getActiveWorkflows()
+                val evaluator = PreconditionEvaluator(applicationContext)
+                val engine = WorkflowEngine(evaluator, credentialRepository)
+
+                val execContext = ExecutionContext(
+                    mapOf(
+                        "package_name" to sbn.packageName,
+                        "title" to (rawTitle ?: sbn.packageName),
+                        "text" to text,
+                        "sender" to sender,
+                        "body" to text,
+                        "received_at" to System.currentTimeMillis()
+                    )
+                )
+
+                for (workflow in activeWorkflows) {
+                    val result = engine.executeWorkflow(workflow, execContext, applicationContext)
+                    val logEntity = WorkflowExecutionLogEntity(
+                        id = UUID.randomUUID().toString(),
+                        workflowId = workflow.id,
+                        status = when (result) {
+                            is WorkflowExecutionResult.Success -> "SUCCESS"
+                            is WorkflowExecutionResult.PreconditionFailed -> "PRECONDITION_FAILED"
+                            is WorkflowExecutionResult.Failed -> "FAILED"
+                        },
+                        timestamp = System.currentTimeMillis(),
+                        messageId = null,
+                        logs = when (result) {
+                            is WorkflowExecutionResult.Success -> result.logs.joinToString("\n")
+                            is WorkflowExecutionResult.PreconditionFailed -> result.logs.joinToString("\n")
+                            is WorkflowExecutionResult.Failed -> result.logs.joinToString("\n")
+                        },
+                        errorReason = when (result) {
+                            is WorkflowExecutionResult.Success -> null
+                            is WorkflowExecutionResult.PreconditionFailed -> result.reason
+                            is WorkflowExecutionResult.Failed -> result.reason
+                        }
+                    )
+                    workflowRepository.saveExecutionLog(logEntity)
                 }
-            }
+
+                val manager = ForwardingManager.getInstance(applicationContext)
+                manager.enqueueIncomingSms(sender = sender, body = text)
+            } catch (_: Exception) {}
         }
     }
 }
