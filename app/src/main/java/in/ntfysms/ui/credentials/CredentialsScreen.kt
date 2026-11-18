@@ -87,7 +87,7 @@ fun CredentialsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            item { Spacer(modifier = Modifier.height(4.dp)) }
+            item { Spacer(modifier = Modifier.height(12.dp)) }
 
             item {
                 ElevatedCard(

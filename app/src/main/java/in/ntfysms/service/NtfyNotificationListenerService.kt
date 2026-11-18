@@ -69,6 +69,7 @@ class NtfyNotificationListenerService : NotificationListenerService() {
                             is WorkflowExecutionResult.Success -> "SUCCESS"
                             is WorkflowExecutionResult.PreconditionFailed -> "PRECONDITION_FAILED"
                             is WorkflowExecutionResult.Failed -> "FAILED"
+                            is WorkflowExecutionResult.Cancelled -> "CANCELLED"
                         },
                         timestamp = System.currentTimeMillis(),
                         messageId = null,
@@ -76,11 +77,13 @@ class NtfyNotificationListenerService : NotificationListenerService() {
                             is WorkflowExecutionResult.Success -> result.logs.joinToString("\n")
                             is WorkflowExecutionResult.PreconditionFailed -> result.logs.joinToString("\n")
                             is WorkflowExecutionResult.Failed -> result.logs.joinToString("\n")
+                            is WorkflowExecutionResult.Cancelled -> result.logs.joinToString("\n")
                         },
                         errorReason = when (result) {
                             is WorkflowExecutionResult.Success -> null
                             is WorkflowExecutionResult.PreconditionFailed -> result.reason
                             is WorkflowExecutionResult.Failed -> result.reason
+                            is WorkflowExecutionResult.Cancelled -> "Manually cancelled by user"
                         }
                     )
                     workflowRepository.saveExecutionLog(logEntity)

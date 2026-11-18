@@ -21,11 +21,12 @@ import `in`.ntfysms.data.PreconditionRepository
 import `in`.ntfysms.data.RoomCredentialRepository
 import `in`.ntfysms.data.RoomPreconditionRepository
 import `in`.ntfysms.data.RoomWorkflowRepository
+import `in`.ntfysms.data.toDomain
 import `in`.ntfysms.data.WorkflowExecutionLogEntity
 import `in`.ntfysms.data.WorkflowRepository
 import `in`.ntfysms.domain.engine.ExecutionContext
+import `in`.ntfysms.domain.engine.ExecutionJobRegistry
 import `in`.ntfysms.domain.engine.NodeExecutionStep
-import `in`.ntfysms.domain.engine.NodeStepState
 import `in`.ntfysms.domain.engine.PreconditionEvaluator
 import org.json.JSONObject
 import `in`.ntfysms.domain.engine.WorkflowEngine
@@ -48,6 +49,14 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+data class ActiveExecutionState(
+    val workflowId: String,
+    val workflowName: String,
+    val steps: List<NodeExecutionStep>,
+    val isExecuting: Boolean,
+    val result: WorkflowExecutionResult? = null
+)
+
 data class MainUiState(
     val nodes: List<DeliveryNode> = emptyList(),
     val allowlist: String = ".*",
@@ -59,6 +68,9 @@ data class MainUiState(
     val isEnabled: Boolean = false,
     val allowInsecureHttp: Boolean = false,
     val forwardNotifications: Boolean = false,
+    val showWorkflowNotifications: Boolean = true,
+    val maxParallelExecutions: Int = 3,
+    val maxExecutionQueueSize: Int = 20,
     val autoClearEnabled: Boolean = false,
     val autoClearMinutes: String = "1440",
     val isRegexValid: Boolean = true,
@@ -85,6 +97,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
+
+    private val _activeExecutionState = MutableStateFlow<ActiveExecutionState?>(null)
+    val activeExecutionState: StateFlow<ActiveExecutionState?> = _activeExecutionState.asStateFlow()
 
     val workflows: StateFlow<List<Workflow>> = workflowRepository.getAllWorkflowsFlow()
         .stateIn(
@@ -151,6 +166,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             isEnabled = s.isEnabled,
             allowInsecureHttp = s.allowInsecureHttp,
             forwardNotifications = s.forwardNotifications,
+            showWorkflowNotifications = s.showWorkflowNotifications,
+            maxParallelExecutions = s.maxParallelExecutions,
+            maxExecutionQueueSize = s.maxExecutionQueueSize,
             autoClearEnabled = s.autoClearEnabled,
             autoClearMinutes = s.autoClearMinutes.toString(),
             isRegexValid = SmsFilter.isValidRegex(s.keywordRegex),
@@ -243,6 +261,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         saveCurrentSettings()
     }
 
+    fun toggleShowWorkflowNotifications(enable: Boolean) {
+        _uiState.value = _uiState.value.copy(showWorkflowNotifications = enable)
+        saveCurrentSettings()
+    }
+
+    fun updateMaxParallelExecutions(count: Int) {
+        _uiState.value = _uiState.value.copy(maxParallelExecutions = count.coerceIn(1, 10))
+        saveCurrentSettings()
+    }
+
+    fun updateMaxExecutionQueueSize(size: Int) {
+        _uiState.value = _uiState.value.copy(maxExecutionQueueSize = size.coerceIn(5, 100))
+        saveCurrentSettings()
+    }
+
     fun toggleMasterSwitch(enabled: Boolean) {
         _uiState.value = _uiState.value.copy(isEnabled = enabled)
         saveCurrentSettings()
@@ -297,7 +330,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val hasNotifTrigger = workflow.nodes.any { it.type == NodeType.NOTIFICATION_TRIGGER }
                 val hasNotifPerm = checkNotificationListenerPermissionInternal()
                 if (hasNotifTrigger && !hasNotifPerm) {
-                    // Do not allow enabling
                     workflowRepository.setWorkflowEnabled(id, false)
                     return@launch
                 }
@@ -320,6 +352,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             workflowRepository.clearLogsForWorkflow(workflowId)
         }
+    }
+
+    fun cancelWorkflowExecution(workflowId: String) {
+        ExecutionJobRegistry.cancelJob(workflowId)
+    }
+
+    fun clearActiveExecutionState() {
+        _activeExecutionState.value = null
     }
 
     fun saveCredential(credential: Credential) {
@@ -375,7 +415,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         onProgressUpdate: (List<NodeExecutionStep>) -> Unit,
         onResult: (WorkflowExecutionResult) -> Unit
     ) {
-        viewModelScope.launch(Dispatchers.IO) {
+        retryWorkflowFromFailedNode(workflow, null, onProgressUpdate, onResult)
+    }
+
+    fun retryWorkflowFromFailedNode(
+        workflow: Workflow,
+        failedNodeId: String?,
+        onProgressUpdate: (List<NodeExecutionStep>) -> Unit,
+        onResult: (WorkflowExecutionResult) -> Unit
+    ) {
+        val job = viewModelScope.launch(Dispatchers.IO) {
+            _activeExecutionState.value = ActiveExecutionState(
+                workflowId = workflow.id,
+                workflowName = workflow.name,
+                steps = emptyList(),
+                isExecuting = true
+            )
+
             val context = getApplication<Application>()
             val evaluator = PreconditionEvaluator(context)
             val engine = WorkflowEngine(evaluator, credentialRepository)
@@ -407,6 +463,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             testContextMap["received_at"] = System.currentTimeMillis()
+            testContextMap["show_workflow_notifications"] = _uiState.value.showWorkflowNotifications
 
             val execContext = ExecutionContext(testContextMap)
 
@@ -414,17 +471,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 workflow = workflow,
                 context = execContext,
                 appContext = context,
+                startNodeId = failedNodeId,
                 onStepUpdate = { steps ->
+                    _activeExecutionState.value = ActiveExecutionState(
+                        workflowId = workflow.id,
+                        workflowName = workflow.name,
+                        steps = steps,
+                        isExecuting = true
+                    )
                     viewModelScope.launch(Dispatchers.Main) {
                         onProgressUpdate(steps)
                     }
                 }
             )
 
+            val currentSteps = _activeExecutionState.value?.steps ?: emptyList()
+            _activeExecutionState.value = ActiveExecutionState(
+                workflowId = workflow.id,
+                workflowName = workflow.name,
+                steps = currentSteps,
+                isExecuting = false,
+                result = result
+            )
+
             val logMsg = when (result) {
-                is WorkflowExecutionResult.Success -> "✅ Success!\n" + result.logs.joinToString("\n")
-                is WorkflowExecutionResult.PreconditionFailed -> "⏳ Precondition Failed: ${result.reason}\n" + result.logs.joinToString("\n")
-                is WorkflowExecutionResult.Failed -> "❌ Failed: ${result.reason}\n" + result.logs.joinToString("\n")
+                is WorkflowExecutionResult.Success -> "✅ Retry Success!\n" + result.logs.joinToString("\n")
+                is WorkflowExecutionResult.PreconditionFailed -> "⏳ Retry Precondition Failed: ${result.reason}\n" + result.logs.joinToString("\n")
+                is WorkflowExecutionResult.Failed -> "❌ Retry Failed: ${result.reason}\n" + result.logs.joinToString("\n")
+                is WorkflowExecutionResult.Cancelled -> "🛑 Cancelled: Workflow manually cancelled by user\n" + result.logs.joinToString("\n")
             }
 
             val logEntity = WorkflowExecutionLogEntity(
@@ -434,6 +508,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     is WorkflowExecutionResult.Success -> "SUCCESS"
                     is WorkflowExecutionResult.PreconditionFailed -> "PRECONDITION_FAILED"
                     is WorkflowExecutionResult.Failed -> "FAILED"
+                    is WorkflowExecutionResult.Cancelled -> "CANCELLED"
                 },
                 timestamp = System.currentTimeMillis(),
                 messageId = null,
@@ -442,6 +517,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     is WorkflowExecutionResult.Success -> null
                     is WorkflowExecutionResult.PreconditionFailed -> result.reason
                     is WorkflowExecutionResult.Failed -> result.reason
+                    is WorkflowExecutionResult.Cancelled -> "Manually cancelled by user"
                 }
             )
             workflowRepository.saveExecutionLog(logEntity)
@@ -450,6 +526,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 onResult(result)
             }
         }
+
+        ExecutionJobRegistry.registerJob(workflow.id, job)
     }
 
     fun testRunWorkflow(workflow: Workflow, onResult: (String) -> Unit) {
@@ -461,6 +539,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     is WorkflowExecutionResult.Success -> "✅ Success!\n" + result.logs.joinToString("\n")
                     is WorkflowExecutionResult.PreconditionFailed -> "⏳ Precondition Failed: ${result.reason}\n" + result.logs.joinToString("\n")
                     is WorkflowExecutionResult.Failed -> "❌ Failed: ${result.reason}\n" + result.logs.joinToString("\n")
+                    is WorkflowExecutionResult.Cancelled -> "🛑 Cancelled: Workflow manually cancelled by user\n" + result.logs.joinToString("\n")
                 }
                 onResult(logMsg)
             }
@@ -544,6 +623,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             isEnabled = current.isEnabled,
             allowInsecureHttp = current.allowInsecureHttp,
             forwardNotifications = current.forwardNotifications,
+            showWorkflowNotifications = current.showWorkflowNotifications,
+            maxParallelExecutions = current.maxParallelExecutions,
+            maxExecutionQueueSize = current.maxExecutionQueueSize,
             autoClearEnabled = current.autoClearEnabled,
             autoClearMinutes = current.autoClearMinutes.toIntOrNull() ?: 1440
         )

@@ -90,6 +90,13 @@ tasks.whenTaskAdded {
 }
 
 dependencies {
+    implementation(project(":core:model"))
+    implementation(project(":core:data"))
+    implementation(project(":core:engine"))
+    implementation(project(":core:ui"))
+    implementation(project(":feature:workflows"))
+    implementation(project(":feature:preconditions"))
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)

@@ -66,6 +66,14 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".receiver.WorkflowCancelReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="in.ntfysms.ACTION_CANCEL_WORKFLOW" />
+            </intent-filter>
+        </receiver>
+
         <!-- Android 14 (API 34) Foreground Service with dataSync type for SMS/Network queue synchronization -->
         <service
             android:name=".service.SmsForwarderService"
