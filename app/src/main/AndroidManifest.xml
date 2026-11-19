@@ -90,18 +90,6 @@
             </intent-filter>
         </service>
 
-        <!-- Quick Settings Tile Service -->
-        <service
-            android:name=".service.SmsForwarderTileService"
-            android:icon="@drawable/ic_notification"
-            android:label="NtfySMS"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-        </service>
-
         <!-- Quick Settings Tile Service for Workflows Master Switch -->
         <service
             android:name=".service.WorkflowsTileService"
