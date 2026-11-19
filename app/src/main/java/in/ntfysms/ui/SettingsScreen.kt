@@ -1,8 +1,15 @@
 package `in`.ntfysms.ui
 
+import android.app.Activity
+import android.app.KeyguardManager
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +30,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
@@ -37,6 +45,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,7 +55,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.fragment.app.FragmentActivity
 import `in`.ntfysms.BuildConfig
 
 @Composable
@@ -57,6 +70,75 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+
+    var pendingToggleState by remember { mutableStateOf<Boolean?>(null) }
+
+    val securityIntentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            pendingToggleState?.let { targetState ->
+                viewModel.toggleLockCredentialsWithBiometric(targetState)
+                pendingToggleState = null
+            }
+        } else {
+            pendingToggleState = null
+        }
+    }
+
+    fun authenticateSecurityToggle(targetState: Boolean) {
+        pendingToggleState = targetState
+
+        val activity = context as? FragmentActivity
+        if (activity != null) {
+            try {
+                val executor = ContextCompat.getMainExecutor(context)
+                val prompt = BiometricPrompt(
+                    activity,
+                    executor,
+                    object : BiometricPrompt.AuthenticationCallback() {
+                        override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                            super.onAuthenticationSucceeded(result)
+                            viewModel.toggleLockCredentialsWithBiometric(targetState)
+                            pendingToggleState = null
+                        }
+
+                        override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                            super.onAuthenticationError(errorCode, errString)
+                            pendingToggleState = null
+                        }
+                    }
+                )
+                val promptInfo = BiometricPrompt.PromptInfo.Builder()
+                    .setTitle("Vault Security Lock")
+                    .setSubtitle("Authenticate using biometrics or device lock to change vault security settings.")
+                    .setAllowedAuthenticators(
+                        BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                        BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                    )
+                    .build()
+
+                prompt.authenticate(promptInfo)
+                return
+            } catch (_: Exception) {}
+        }
+
+        val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+        if (keyguardManager != null && keyguardManager.isDeviceSecure) {
+            val intent = keyguardManager.createConfirmDeviceCredentialIntent(
+                "Vault Security Lock",
+                "Authenticate using device PIN, pattern, or password to change vault security settings."
+            )
+            if (intent != null) {
+                securityIntentLauncher.launch(intent)
+                return
+            }
+        }
+
+        // If no security lock is set up on the phone
+        viewModel.toggleLockCredentialsWithBiometric(targetState)
+        pendingToggleState = null
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -211,15 +293,15 @@ fun SettingsScreen(
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = "Requires Biometrics or Device PIN/Pattern/Password to view secret passwords in Vault",
+                                    text = "Requires Biometrics or Device Credentials (PIN, Pattern, Password) to view secret passwords in Vault",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                             Switch(
                                 checked = uiState.lockCredentialsWithBiometric,
-                                onCheckedChange = { enabled ->
-                                    viewModel.toggleLockCredentialsWithBiometric(enabled)
+                                onCheckedChange = { targetState ->
+                                    authenticateSecurityToggle(targetState)
                                 }
                             )
                         }
@@ -468,44 +550,28 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.secondary,
-                                modifier = Modifier.height(16.dp)
-                            )
-                            Text(
-                                text = "Locally encrypted • No cloud tracking • Highly secure",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(4.dp))
-
-                        OutlinedButton(
+                        Button(
                             onClick = {
                                 try {
-                                    val intent = Intent(Intent.ACTION_VIEW,
-                                        "https://aman400.github.io/ntfysms/".toUri())
+                                    val intent = Intent(Intent.ACTION_VIEW, "https://aman400.github.io/ntfysms".toUri())
                                     context.startActivity(intent)
                                 } catch (_: Exception) {}
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.Language, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Visit Official Website")
+                            Icon(
+                                imageVector = Icons.Default.Language,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Visit Official Website & Docs")
                         }
                     }
                 }
             }
 
-            item { Spacer(modifier = Modifier.height(30.dp)) }
+            item { Spacer(modifier = Modifier.height(32.dp)) }
         }
     }
 }
@@ -537,21 +603,18 @@ fun PermissionStatusRow(
         if (isGranted) {
             SuggestionChip(
                 onClick = {},
-                label = {
-                    Text(
-                        text = "Granted",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
+                label = { Text("Granted", fontSize = 11.sp, fontWeight = FontWeight.Bold) },
                 colors = SuggestionChipDefaults.suggestionChipColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     labelColor = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             )
         } else {
-            Button(onClick = onGrantClick) {
-                Text("Grant", fontSize = 12.sp)
+            Button(
+                onClick = onGrantClick,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) {
+                Text("Grant", fontSize = 11.sp)
             }
         }
     }
