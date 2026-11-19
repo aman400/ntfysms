@@ -5,6 +5,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import `in`.ntfysms.data.AppDatabase
 import `in`.ntfysms.data.DefaultWorkflowInitializer
+import `in`.ntfysms.data.EncryptedSettingsRepository
 import `in`.ntfysms.data.RoomCredentialRepository
 import `in`.ntfysms.data.RoomWorkflowRepository
 import `in`.ntfysms.data.WorkflowExecutionLogEntity
@@ -12,7 +13,6 @@ import `in`.ntfysms.domain.engine.ExecutionContext
 import `in`.ntfysms.domain.engine.PreconditionEvaluator
 import `in`.ntfysms.domain.engine.WorkflowEngine
 import `in`.ntfysms.domain.engine.WorkflowExecutionResult
-import `in`.ntfysms.worker.ForwardingManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -23,6 +23,9 @@ class NtfyNotificationListenerService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
         if (sbn.packageName == packageName) return
+
+        val settings = EncryptedSettingsRepository(applicationContext).getSettings()
+        if (!settings.globalWorkflowsEnabled) return
 
         val extras = sbn.notification?.extras ?: return
 
@@ -83,15 +86,13 @@ class NtfyNotificationListenerService : NotificationListenerService() {
                             is WorkflowExecutionResult.Success -> null
                             is WorkflowExecutionResult.PreconditionFailed -> result.reason
                             is WorkflowExecutionResult.Failed -> result.reason
-                            is WorkflowExecutionResult.Cancelled -> "Manually cancelled by user"
+                            is WorkflowExecutionResult.Cancelled -> "Execution cancelled by user"
                         }
                     )
                     workflowRepository.saveExecutionLog(logEntity)
                 }
-
-                val manager = ForwardingManager.getInstance(applicationContext)
-                manager.enqueueIncomingSms(sender = sender, body = text)
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         }
     }
 }

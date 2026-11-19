@@ -26,7 +26,9 @@ data class AppSettings(
     val maxParallelExecutions: Int = 3,
     val maxExecutionQueueSize: Int = 20,
     val autoClearEnabled: Boolean = false,
-    val autoClearMinutes: Int = 1440
+    val autoClearMinutes: Int = 1440,
+    val lockCredentialsWithBiometric: Boolean = false,
+    val globalWorkflowsEnabled: Boolean = true
 ) {
     val allowlistItems: List<String>
         get() = allowlist.split(",", "\n").map { it.trim() }.filter { it.isNotEmpty() }
@@ -109,7 +111,9 @@ class EncryptedSettingsRepository(context: Context) : SettingsRepository {
             maxParallelExecutions = prefs.getInt(KEY_MAX_PARALLEL_EXECUTIONS, 3),
             maxExecutionQueueSize = prefs.getInt(KEY_MAX_EXECUTION_QUEUE_SIZE, 20),
             autoClearEnabled = prefs.getBoolean(KEY_AUTO_CLEAR_ENABLED, false),
-            autoClearMinutes = prefs.getInt(KEY_AUTO_CLEAR_MINUTES, 1440)
+            autoClearMinutes = prefs.getInt(KEY_AUTO_CLEAR_MINUTES, 1440),
+            lockCredentialsWithBiometric = prefs.getBoolean(KEY_LOCK_CREDENTIALS_WITH_BIOMETRIC, false),
+            globalWorkflowsEnabled = prefs.getBoolean(KEY_GLOBAL_WORKFLOWS_ENABLED, true)
         )
     }
 
@@ -131,6 +135,8 @@ class EncryptedSettingsRepository(context: Context) : SettingsRepository {
             .putInt(KEY_MAX_EXECUTION_QUEUE_SIZE, settings.maxExecutionQueueSize)
             .putBoolean(KEY_AUTO_CLEAR_ENABLED, settings.autoClearEnabled)
             .putInt(KEY_AUTO_CLEAR_MINUTES, settings.autoClearMinutes)
+            .putBoolean(KEY_LOCK_CREDENTIALS_WITH_BIOMETRIC, settings.lockCredentialsWithBiometric)
+            .putBoolean(KEY_GLOBAL_WORKFLOWS_ENABLED, settings.globalWorkflowsEnabled)
             .apply()
     }
 
@@ -165,6 +171,8 @@ class EncryptedSettingsRepository(context: Context) : SettingsRepository {
         private const val KEY_MAX_EXECUTION_QUEUE_SIZE = "max_execution_queue_size"
         private const val KEY_AUTO_CLEAR_ENABLED = "auto_clear_enabled"
         private const val KEY_AUTO_CLEAR_MINUTES = "auto_clear_minutes"
+        private const val KEY_LOCK_CREDENTIALS_WITH_BIOMETRIC = "lock_credentials_with_biometric"
+        private const val KEY_GLOBAL_WORKFLOWS_ENABLED = "global_workflows_enabled"
 
         fun serializeNodes(nodes: List<DeliveryNode>): String {
             return nodes.joinToString("|||") { node ->

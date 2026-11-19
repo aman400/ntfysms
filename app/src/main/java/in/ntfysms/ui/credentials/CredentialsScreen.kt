@@ -63,6 +63,7 @@ fun CredentialsScreen(
     viewModel: MainViewModel,
     onBack: (() -> Unit)? = null
 ) {
+    val uiState by viewModel.uiState.collectAsState()
     val credentials by viewModel.credentials.collectAsState()
     val workflows by viewModel.workflows.collectAsState()
     val preconditions by viewModel.preconditions.collectAsState()
@@ -147,6 +148,7 @@ fun CredentialsScreen(
             credential = null,
             linkedWorkflowCount = 0,
             linkedPreconditionCount = 0,
+            isLockEnabled = uiState.lockCredentialsWithBiometric,
             onDismiss = { showAddDialog = false },
             onSave = { newCred ->
                 viewModel.saveCredential(newCred)
@@ -173,6 +175,7 @@ fun CredentialsScreen(
             credential = cred,
             linkedWorkflowCount = linkedWorkflows.size,
             linkedPreconditionCount = linkedPreconditions.size,
+            isLockEnabled = uiState.lockCredentialsWithBiometric,
             onDismiss = { editingCredential = null },
             onSave = { updated ->
                 viewModel.saveCredential(updated)

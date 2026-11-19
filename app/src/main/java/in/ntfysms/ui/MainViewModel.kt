@@ -73,6 +73,8 @@ data class MainUiState(
     val maxExecutionQueueSize: Int = 20,
     val autoClearEnabled: Boolean = false,
     val autoClearMinutes: String = "1440",
+    val lockCredentialsWithBiometric: Boolean = false,
+    val globalWorkflowsEnabled: Boolean = true,
     val isRegexValid: Boolean = true,
     val isUrlValid: Boolean = true,
     val isSendingTest: Boolean = false,
@@ -171,6 +173,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             maxExecutionQueueSize = s.maxExecutionQueueSize,
             autoClearEnabled = s.autoClearEnabled,
             autoClearMinutes = s.autoClearMinutes.toString(),
+            lockCredentialsWithBiometric = s.lockCredentialsWithBiometric,
+            globalWorkflowsEnabled = s.globalWorkflowsEnabled,
             isRegexValid = SmsFilter.isValidRegex(s.keywordRegex),
             isUrlValid = true,
             isBatteryOptimized = checkBatteryOptimizedInternal(),
@@ -263,6 +267,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleShowWorkflowNotifications(enable: Boolean) {
         _uiState.value = _uiState.value.copy(showWorkflowNotifications = enable)
+        saveCurrentSettings()
+    }
+
+    fun toggleLockCredentialsWithBiometric(enable: Boolean) {
+        _uiState.value = _uiState.value.copy(lockCredentialsWithBiometric = enable)
+        saveCurrentSettings()
+    }
+
+    fun toggleGlobalWorkflowsEnabled(enable: Boolean) {
+        _uiState.value = _uiState.value.copy(globalWorkflowsEnabled = enable)
         saveCurrentSettings()
     }
 
@@ -627,7 +641,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             maxParallelExecutions = current.maxParallelExecutions,
             maxExecutionQueueSize = current.maxExecutionQueueSize,
             autoClearEnabled = current.autoClearEnabled,
-            autoClearMinutes = current.autoClearMinutes.toIntOrNull() ?: 1440
+            autoClearMinutes = current.autoClearMinutes.toIntOrNull() ?: 1440,
+            lockCredentialsWithBiometric = current.lockCredentialsWithBiometric,
+            globalWorkflowsEnabled = current.globalWorkflowsEnabled
         )
         settingsRepo.saveSettings(settings)
     }

@@ -1,5 +1,7 @@
 package `in`.ntfysms.core.ui.components
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -62,6 +65,7 @@ fun CredentialBottomSheet(
     credential: Credential?,
     linkedWorkflowCount: Int = 0,
     linkedPreconditionCount: Int = 0,
+    isLockEnabled: Boolean = false,
     onDismiss: () -> Unit,
     onSave: (Credential) -> Unit
 ) {
@@ -314,6 +318,7 @@ fun CredentialBottomSheet(
                             onValueChange = { bearerToken = it },
                             label = "API Bearer Token / Secret Key",
                             tooltipText = "Secret authentication token or API key sent via HTTP Authorization header.",
+                            isLockEnabled = isLockEnabled,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -330,6 +335,7 @@ fun CredentialBottomSheet(
                             onValueChange = { basicPass = it },
                             label = "Password",
                             tooltipText = "HTTP Basic authentication password.",
+                            isLockEnabled = isLockEnabled,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -359,6 +365,7 @@ fun CredentialBottomSheet(
                             onValueChange = { bearerToken = it },
                             label = "ntfy Auth Token (Optional)",
                             tooltipText = "Optional access token for protected ntfy topics.",
+                            isLockEnabled = isLockEnabled,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -375,6 +382,7 @@ fun CredentialBottomSheet(
                             onValueChange = { gotifyToken = it },
                             label = "Gotify App Token",
                             tooltipText = "Application token generated in your Gotify dashboard.",
+                            isLockEnabled = isLockEnabled,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -392,10 +400,64 @@ fun SensitiveTextField(
     onValueChange: (String) -> Unit,
     label: String,
     tooltipText: String,
+    isLockEnabled: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var passwordVisible by remember { mutableStateOf(false) }
     var showTooltip by remember { mutableStateOf(false) }
+
+    val intentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            passwordVisible = true
+        }
+    }
+
+    fun requestUnlock() {
+        val activity = context as? androidx.fragment.app.FragmentActivity
+        if (activity != null) {
+            try {
+                val executor = androidx.core.content.ContextCompat.getMainExecutor(context)
+                val prompt = androidx.biometric.BiometricPrompt(
+                    activity,
+                    executor,
+                    object : androidx.biometric.BiometricPrompt.AuthenticationCallback() {
+                        override fun onAuthenticationSucceeded(result: androidx.biometric.BiometricPrompt.AuthenticationResult) {
+                            super.onAuthenticationSucceeded(result)
+                            passwordVisible = true
+                        }
+                    }
+                )
+                val promptInfo = androidx.biometric.BiometricPrompt.PromptInfo.Builder()
+                    .setTitle("Unlock Vault Credential")
+                    .setSubtitle("Authenticate using biometrics or device PIN/pattern to view secret password")
+                    .setAllowedAuthenticators(
+                        androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                        androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                    )
+                    .build()
+
+                prompt.authenticate(promptInfo)
+                return
+            } catch (_: Exception) {}
+        }
+
+        val keyguardManager = context.getSystemService(android.content.Context.KEYGUARD_SERVICE) as? android.app.KeyguardManager
+        if (keyguardManager != null && keyguardManager.isDeviceSecure) {
+            val intent = keyguardManager.createConfirmDeviceCredentialIntent(
+                "Unlock Vault Credential",
+                "Authenticate using device PIN, pattern, or password to view secret credential."
+            )
+            if (intent != null) {
+                intentLauncher.launch(intent)
+                return
+            }
+        }
+
+        passwordVisible = true
+    }
 
     OutlinedTextField(
         value = value,
@@ -409,7 +471,19 @@ fun SensitiveTextField(
         ),
         trailingIcon = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                IconButton(
+                    onClick = {
+                        if (passwordVisible) {
+                            passwordVisible = false
+                        } else {
+                            if (isLockEnabled) {
+                                requestUnlock()
+                            } else {
+                                passwordVisible = true
+                            }
+                        }
+                    }
+                ) {
                     Icon(
                         imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
                         contentDescription = "Toggle Password Visibility"
