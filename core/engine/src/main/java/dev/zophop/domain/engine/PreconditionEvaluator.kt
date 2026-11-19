@@ -301,7 +301,11 @@ open class PreconditionEvaluator(
             connections = check.connections
         )
         val evaluator = PreconditionEvaluator(context, okHttpClient)
-        val engine = WorkflowEngine(evaluator)
+        val engine = WorkflowEngine(
+            preconditionEvaluator = evaluator,
+            credentialRepository = null,
+            executorFactory = NodeExecutorFactory(okHttpClient)
+        )
         var capturedSteps = emptyList<NodeExecutionStep>()
 
         val manualTrigger = check.nodes.firstOrNull { it.type == NodeType.MANUAL_TRIGGER }

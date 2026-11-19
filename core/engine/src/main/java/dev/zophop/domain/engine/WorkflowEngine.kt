@@ -209,6 +209,13 @@ open class WorkflowEngine(
 
                 if (!currentNode.isEnabled) {
                     logs.add("Node '${currentNode.name}' is disabled, skipping.")
+                    val outgoing = workflow.connections.filter { it.fromNodeId == currentNode.id }
+                    for (conn in outgoing) {
+                        val nextNode = workflow.nodes.find { it.id == conn.toNodeId }
+                        if (nextNode != null) {
+                            queue.add(nextNode to conn.inputPort)
+                        }
+                    }
                     continue
                 }
 
@@ -369,6 +376,13 @@ open class WorkflowEngine(
                 if (!currentNode.isEnabled) {
                     logs.add("Node '${currentNode.name}' is disabled, skipping.")
                     updateStep(currentNode.id, NodeStepState.SKIPPED, message = "Node disabled")
+                    val outgoing = workflow.connections.filter { it.fromNodeId == currentNode.id }
+                    for (conn in outgoing) {
+                        val nextNode = workflow.nodes.find { it.id == conn.toNodeId }
+                        if (nextNode != null) {
+                            queue.add(nextNode to conn.inputPort)
+                        }
+                    }
                     continue
                 }
 

@@ -52,6 +52,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
+import dev.zophop.core.ui.components.InfoTooltipField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
@@ -105,7 +106,8 @@ fun WorkflowEditorScreen(
     onTestRunWorkflowWithProgress: ((Workflow, (List<NodeExecutionStep>) -> Unit, (WorkflowExecutionResult) -> Unit) -> Unit)? = null,
     onCancelWorkflowExecution: ((String) -> Unit)? = null,
     onSaveCredential: ((Credential) -> Unit)? = null,
-    onSavePrecondition: ((PreconditionEntity) -> Unit)? = null
+    onSavePrecondition: ((PreconditionEntity) -> Unit)? = null,
+    onRequestCreatePrecondition: ((onCreated: (PreconditionEntity) -> Unit) -> Unit)? = null
 ) {
     var name by remember { mutableStateOf(workflow.name) }
     var description by remember { mutableStateOf(workflow.description) }
@@ -175,7 +177,8 @@ fun WorkflowEditorScreen(
                             editingNode = null
                         },
                         onSaveCredential = onSaveCredential,
-                        onSavePrecondition = onSavePrecondition
+                        onSavePrecondition = onSavePrecondition,
+                        onRequestCreatePrecondition = onRequestCreatePrecondition
                     )
                 }
                 showAddNodeSheet -> {
@@ -284,10 +287,11 @@ fun WorkflowEditorScreen(
                                 }
 
                                 item {
-                                    OutlinedTextField(
+                                    InfoTooltipField(
                                         value = name,
                                         onValueChange = { name = it },
-                                        label = { Text("Workflow Name") },
+                                        label = "Workflow Name",
+                                        tooltipText = "Descriptive name for this automated workflow pipeline.",
                                         modifier = Modifier.fillMaxWidth(),
                                         singleLine = true
                                     )

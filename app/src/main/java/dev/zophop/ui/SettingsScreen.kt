@@ -553,7 +553,7 @@ fun SettingsScreen(
                         Button(
                             onClick = {
                                 try {
-                                    val intent = Intent(Intent.ACTION_VIEW, "https://aman400.github.io/ntfysms".toUri())
+                                    val intent = Intent(Intent.ACTION_VIEW, "https://aman400.github.io/zophop".toUri())
                                     context.startActivity(intent)
                                 } catch (_: Exception) {}
                             },

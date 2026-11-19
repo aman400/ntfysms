@@ -5,8 +5,8 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import dev.zophop.data.toDomain
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -19,17 +19,19 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -39,7 +41,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -50,15 +51,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.zophop.core.ui.components.CredentialBottomSheet
 import dev.zophop.core.ui.components.HeaderInputEditor
-import dev.zophop.core.ui.components.NoSwipeBottomSheet
+import dev.zophop.core.ui.components.InfoTooltipField
+import dev.zophop.core.ui.components.SearchableDropdownSelector
+import dev.zophop.core.ui.components.rememberAlwaysFloatingInteractionSource
 import dev.zophop.data.PreconditionEntity
+import dev.zophop.data.toDomain
 import dev.zophop.domain.engine.NodeExecutionStep
 import dev.zophop.domain.engine.PreconditionResult
 import dev.zophop.domain.model.Credential
@@ -89,9 +98,12 @@ fun NodeConfigBottomSheet(
     onSave: (WorkflowNode) -> Unit,
     onSaveCredential: ((Credential) -> Unit)? = null,
     onSavePrecondition: ((PreconditionEntity) -> Unit)? = null,
+    onRequestCreatePrecondition: ((onCreated: (PreconditionEntity) -> Unit) -> Unit)? = null,
     onTestPreconditionWithProgress: ((PreconditionEntity, (List<NodeExecutionStep>) -> Unit, (PreconditionResult) -> Unit) -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
 
     val sendSmsPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -200,23 +212,6 @@ fun NodeConfigBottomSheet(
         )
     }
 
-    // Searchable Preconditions Dropdown State
-    var precSearchQuery by remember { mutableStateOf("") }
-    var expandedPrecMenu by remember { mutableStateOf(false) }
-
-    val filteredVaultPreconditions = remember(precSearchQuery, vaultPreconditions) {
-        if (precSearchQuery.isBlank()) {
-            vaultPreconditions
-        } else {
-            vaultPreconditions.filter { prec ->
-                prec.name.contains(precSearchQuery, ignoreCase = true) ||
-                prec.type.contains(precSearchQuery, ignoreCase = true) ||
-                WorkflowUiHelper.getPreconditionTitle(prec.type).contains(precSearchQuery, ignoreCase = true)
-            }
-        }
-    }
-
-    var expandedCredMenu by remember { mutableStateOf(false) }
     var showCreateCredSheet by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -255,6 +250,8 @@ fun NodeConfigBottomSheet(
                     Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = {
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
                             if (name.isBlank()) {
                                 errorMessage = "Node name cannot be blank."
                                 return@Button
@@ -402,13 +399,13 @@ fun NodeConfigBottomSheet(
                 }
             }
 
-            OutlinedTextField(
+            InfoTooltipField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Node Name") },
+                label = "Node Name",
+                tooltipText = "Unique name identifying this step in the workflow pipeline.",
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                supportingText = { Text("Unique name identifying this step in the workflow pipeline.", fontSize = 10.sp) }
+                singleLine = true
             )
 
             // Permission Warning Banner
@@ -446,73 +443,47 @@ fun NodeConfigBottomSheet(
             // Credential attachment selector for Actions
             if (node.type in listOf(NodeType.HTTP_ACTION, NodeType.NTFY_ACTION, NodeType.GOTIFY_ACTION)) {
                 val selectedCred = credentials.find { it.id == credentialId }
-                val credName = selectedCred?.name ?: "None (Optional Credential)"
+                val credName = selectedCred?.let { "🔑 ${it.name} (${it.type.name})" } ?: "None (Optional Credential)"
 
-                ExposedDropdownMenuBox(
-                    expanded = expandedCredMenu,
-                    onExpandedChange = { expandedCredMenu = !expandedCredMenu }
-                ) {
-                    OutlinedTextField(
-                        value = credName,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("🔑 Attach Saved Credential") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCredMenu) },
-                        modifier = Modifier
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                            .fillMaxWidth(),
-                        supportingText = { Text("Attach saved credentials for authenticated requests.", fontSize = 10.sp) }
-                    )
-
-                    ExposedDropdownMenu(
-                        expanded = expandedCredMenu,
-                        onDismissRequest = { expandedCredMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("None") },
-                            onClick = {
-                                credentialId = ""
-                                expandedCredMenu = false
-                            }
-                        )
-                        credentials.forEach { cred ->
-                            DropdownMenuItem(
-                                text = { Text("🔑 ${cred.name} (${cred.type.name})") },
-                                onClick = {
-                                    credentialId = cred.id
-                                    expandedCredMenu = false
-                                }
-                            )
-                        }
-                        DropdownMenuItem(
-                            text = { Text("➕ Create New Credential...") },
-                            onClick = {
-                                expandedCredMenu = false
-                                showCreateCredSheet = true
-                            }
-                        )
-                    }
-                }
+                SearchableDropdownSelector(
+                    selectedItemText = credName,
+                    label = "🔑 Attach Saved Credential",
+                    searchPlaceholder = "Search credentials...",
+                    items = credentials,
+                    itemText = { cred -> "${cred.name} (${cred.type.name})" },
+                    onItemSelected = { cred ->
+                        credentialId = cred?.id ?: ""
+                    },
+                    isItemSelected = { cred -> cred.id == credentialId },
+                    showNoneOption = true,
+                    noneOptionText = "None",
+                    onCreateNewClick = {
+                        showCreateCredSheet = true
+                    },
+                    createNewText = "➕ Create New Credential...",
+                    tooltipText = "Attach saved vault credentials for authenticated server requests.",
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             // Node Specific Config Fields
             when (node.type) {
                 NodeType.SMS_TRIGGER -> {
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = allowlist,
                         onValueChange = { allowlist = it },
-                        label = { Text("Sender Allowlist Regex (e.g. .*BANK.*)") },
+                        label = "Sender Allowlist Regex (e.g. .*BANK.*)",
+                        tooltipText = "Regex pattern or comma-separated list matching allowed SMS sender addresses.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Regex pattern matching allowed SMS sender addresses.", fontSize = 10.sp) }
+                        singleLine = true
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = keywordRegex,
                         onValueChange = { keywordRegex = it },
-                        label = { Text("Keyword Filter Regex (e.g. OTP|code)") },
+                        label = "Keyword Filter Regex (e.g. OTP|code)",
+                        tooltipText = "Regex filtering SMS body text for target keywords.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Regex filtering SMS body text for target keywords.", fontSize = 10.sp) }
+                        singleLine = true
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -522,39 +493,40 @@ fun NodeConfigBottomSheet(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = testSender,
                         onValueChange = { testSender = it },
-                        label = { Text("Simulated Sender") },
+                        label = "Simulated Sender",
+                        tooltipText = "Mock sender number used during dry-run test execution.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Mock sender number used during dry-run test execution.", fontSize = 10.sp) }
+                        singleLine = true
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = testBody,
                         onValueChange = { testBody = it },
-                        label = { Text("Simulated SMS Body") },
+                        label = "Simulated SMS Body",
+                        tooltipText = "Mock SMS text body used during dry-run test execution.",
                         modifier = Modifier.fillMaxWidth(),
-                        minLines = 2,
-                        supportingText = { Text("Mock SMS text body used during dry-run test execution.", fontSize = 10.sp) }
+                        singleLine = false,
+                        minLines = 2
                     )
                 }
                 NodeType.NOTIFICATION_TRIGGER -> {
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = packageFilter,
                         onValueChange = { packageFilter = it },
-                        label = { Text("App Package Filter (e.g. com.bank.app)") },
+                        label = "App Package Filter (e.g. com.bank.app)",
+                        tooltipText = "Package name filter for incoming notification events.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Package name filter for incoming notification events.", fontSize = 10.sp) }
+                        singleLine = true
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = textRegex,
                         onValueChange = { textRegex = it },
-                        label = { Text("Notification Text Regex") },
+                        label = "Notification Text Regex",
+                        tooltipText = "Regex matching notification text content.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Regex matching notification text content.", fontSize = 10.sp) }
+                        singleLine = true
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -564,92 +536,94 @@ fun NodeConfigBottomSheet(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = testPackageName,
                         onValueChange = { testPackageName = it },
-                        label = { Text("Simulated Package Name") },
+                        label = "Simulated Package Name",
+                        tooltipText = "Mock app package name for testing.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Mock app package name for testing.", fontSize = 10.sp) }
+                        singleLine = true
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = testTitle,
                         onValueChange = { testTitle = it },
-                        label = { Text("Simulated Notification Title") },
+                        label = "Simulated Notification Title",
+                        tooltipText = "Mock notification title for testing.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Mock notification title for testing.", fontSize = 10.sp) }
+                        singleLine = true
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = testText,
                         onValueChange = { testText = it },
-                        label = { Text("Simulated Notification Text") },
+                        label = "Simulated Notification Text",
+                        tooltipText = "Mock notification text for testing.",
                         modifier = Modifier.fillMaxWidth(),
-                        minLines = 2,
-                        supportingText = { Text("Mock notification text for testing.", fontSize = 10.sp) }
+                        singleLine = false,
+                        minLines = 2
                     )
                 }
                 NodeType.PARSE_NOTIFICATION, NodeType.REGEX_PARSER -> {
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = regexPattern,
                         onValueChange = { regexPattern = it },
-                        label = { Text("Regular Expression (e.g. \\b\\d{6}\\b)") },
+                        label = "Regular Expression (e.g. \\b\\d{6}\\b)",
+                        tooltipText = "Regular expression with capture groups to extract variable data.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Regular expression with capture groups to extract variable data.", fontSize = 10.sp) }
+                        singleLine = true
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = outputKey,
                         onValueChange = { outputKey = it },
-                        label = { Text("Output Variable Key (e.g. code)") },
+                        label = "Output Variable Key (e.g. code)",
+                        tooltipText = "Context variable key where the parsed value is saved.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Context variable key where the parsed value is saved.", fontSize = 10.sp) }
+                        singleLine = true
                     )
                 }
                 NodeType.JSON_PARSER -> {
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = jsonKey,
                         onValueChange = { jsonKey = it },
-                        label = { Text("JSON Property Path (e.g. data.code)") },
+                        label = "JSON Property Path (e.g. data.code)",
+                        tooltipText = "Dot-notation path to extract property from JSON response.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Dot-notation path to extract property from JSON response.", fontSize = 10.sp) }
+                        singleLine = true
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = outputKey,
                         onValueChange = { outputKey = it },
-                        label = { Text("Output Variable Key") },
+                        label = "Output Variable Key",
+                        tooltipText = "Context variable key where the extracted value is saved.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Context variable key where the extracted value is saved.", fontSize = 10.sp) }
+                        singleLine = true
                     )
                 }
                 NodeType.TEMPLATE_FORMATTER -> {
                     AutocompleteTextField(
                         value = template,
                         onValueChange = { template = it },
-                        label = { Text("Message Template (e.g. OTP: \${code})") },
+                        label = "Message Template (e.g. OTP: \${code})",
+                        tooltipText = "Message template formatting rules. Supports variables like \${body}, \${sender}, \${code}.",
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3
                     )
                 }
                 NodeType.CONDITION -> {
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = condVariable,
                         onValueChange = { condVariable = it },
-                        label = { Text("Variable Name to Check") },
+                        label = "Variable Name to Check",
+                        tooltipText = "Context variable name evaluated by condition.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Context variable name evaluated by condition.", fontSize = 10.sp) }
+                        singleLine = true
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = condValue,
                         onValueChange = { condValue = it },
-                        label = { Text("Expected Target Value") },
+                        label = "Expected Target Value",
+                        tooltipText = "Expected target value for conditional evaluation.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Expected target value for conditional evaluation.", fontSize = 10.sp) }
+                        singleLine = true
                     )
                 }
                 NodeType.NTFY_ACTION -> {
@@ -689,60 +663,82 @@ fun NodeConfigBottomSheet(
                         }
                     }
 
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = serverUrl,
                         onValueChange = { serverUrl = it },
-                        label = { Text("ntfy Server URL (Leave blank for credential default)") },
-                        placeholder = { Text(credServerUrl.ifBlank { "https://ntfy.sh" }) },
+                        label = "ntfy Server URL (Leave blank for credential default)",
+                        tooltipText = "Target ntfy push notification server base URL (e.g. https://ntfy.sh). Leave blank for credential default.",
+                        placeholder = credServerUrl.ifBlank { "https://ntfy.sh" },
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Target ntfy push notification server base URL.", fontSize = 10.sp) }
+                        singleLine = true
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = topic,
                         onValueChange = { topic = it },
-                        label = { Text("Topic Name (Leave blank for credential default)") },
-                        placeholder = { Text(credTopic.ifBlank { "my-topic" }) },
+                        label = "Topic Name (Leave blank for credential default)",
+                        tooltipText = "Secret destination topic name on ntfy server (e.g. my-topic). Leave blank for credential default.",
+                        placeholder = credTopic.ifBlank { "my-topic" },
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Secret destination topic name on ntfy server.", fontSize = 10.sp) }
+                        singleLine = true
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = token,
                         onValueChange = { token = it },
-                        label = { Text("Auth Token (Optional Override)") },
+                        label = "Auth Token (Optional Override)",
+                        tooltipText = "Optional access token override for protected ntfy topics.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Optional access token override for ntfy topic.", fontSize = 10.sp) }
+                        singleLine = true
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = title,
                         onValueChange = { title = it },
-                        label = { Text("Notification Title") },
+                        label = "Notification Title",
+                        tooltipText = "The bold title header displayed at the top of the ntfy push notification banner on your phone or web app.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Notification banner title.", fontSize = 10.sp) }
+                        singleLine = true
                     )
-                    OutlinedTextField(
-                        value = priority,
-                        onValueChange = { priority = it },
-                        label = { Text("Priority (1=Min, 3=Normal, 5=Max)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Push notification priority level (1 to 5).", fontSize = 10.sp) }
+                    
+                    val ntfyPriorityOptions = remember {
+                        listOf(
+                            "5" to "Max / Urgent (5)",
+                            "4" to "High (4)",
+                            "3" to "Default / Normal (3)",
+                            "2" to "Low (2)",
+                            "1" to "Min / Silent (1)"
+                        )
+                    }
+                    val currentNtfyPriorityLabel = remember(priority) {
+                        ntfyPriorityOptions.find { it.first == priority }?.second ?: "Priority $priority"
+                    }
+
+                    SearchableDropdownSelector(
+                        selectedItemText = currentNtfyPriorityLabel,
+                        label = "Notification Priority",
+                        searchPlaceholder = "Filter priority...",
+                        items = ntfyPriorityOptions,
+                        itemText = { it.second },
+                        onItemSelected = { option ->
+                            if (option != null) priority = option.first
+                        },
+                        isItemSelected = { option -> option.first == priority },
+                        showNoneOption = false,
+                        tooltipText = "Push notification priority level on ntfy server. Higher priority triggers sound, vibration, and banner pop-ups.",
+                        modifier = Modifier.fillMaxWidth()
                     )
-                    OutlinedTextField(
+
+                    InfoTooltipField(
                         value = tags,
                         onValueChange = { tags = it },
-                        label = { Text("Tags / Emojis (comma separated, e.g. otp,warning)") },
+                        label = "Tags / Emojis (comma separated, e.g. otp,warning)",
+                        tooltipText = "Comma-separated tag or emoji names attached to notification (e.g. otp, warning).",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Tags or emoji identifiers attached to notification.", fontSize = 10.sp) }
+                        singleLine = true
                     )
                     AutocompleteTextField(
                         value = template,
                         onValueChange = { template = it },
-                        label = { Text("Custom Message Body / Template (supports \${body}, \${sender})") },
+                        label = "Custom Message Body / Template (supports \${body}, \${sender})",
+                        tooltipText = "Custom push notification message body. Supports variables like \${body}, \${sender}, \${code}.",
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3
                     )
@@ -776,94 +772,99 @@ fun NodeConfigBottomSheet(
                         }
                     }
 
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = serverUrl,
                         onValueChange = { serverUrl = it },
-                        label = { Text("Gotify Server URL (Leave blank for credential default)") },
-                        placeholder = { Text(credServerUrl.ifBlank { "https://gotify.example.com" }) },
+                        label = "Gotify Server URL (Leave blank for credential default)",
+                        tooltipText = "Base URL of your Gotify server (e.g. https://gotify.example.com). Leave blank for credential default.",
+                        placeholder = credServerUrl.ifBlank { "https://gotify.example.com" },
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Base URL of your Gotify server.", fontSize = 10.sp) }
+                        singleLine = true
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = appToken,
                         onValueChange = { appToken = it },
-                        label = { Text("App Token (Optional Override)") },
+                        label = "App Token (Optional Override)",
+                        tooltipText = "Application token override (X-Gotify-Key) for Gotify server.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Application token override for Gotify.", fontSize = 10.sp) }
+                        singleLine = true
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = title,
                         onValueChange = { title = it },
-                        label = { Text("Notification Title") },
+                        label = "Notification Title",
+                        tooltipText = "The notification header title displayed at the top of the Gotify push notification card in the Gotify mobile app & web interface.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Notification message title.", fontSize = 10.sp) }
+                        singleLine = true
                     )
-                    OutlinedTextField(
-                        value = priority,
-                        onValueChange = { priority = it },
-                        label = { Text("Priority (1 to 10)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Gotify priority level (1 to 10).", fontSize = 10.sp) }
+
+                    val gotifyPriorityOptions = remember {
+                        listOf(
+                            "10" to "Max / Urgent (10)",
+                            "8" to "High (8)",
+                            "5" to "Default / Normal (5)",
+                            "3" to "Low (3)",
+                            "1" to "Min (1)"
+                        )
+                    }
+                    val currentGotifyPriorityLabel = remember(priority) {
+                        gotifyPriorityOptions.find { it.first == priority }?.second ?: "Priority $priority"
+                    }
+
+                    SearchableDropdownSelector(
+                        selectedItemText = currentGotifyPriorityLabel,
+                        label = "Notification Priority",
+                        searchPlaceholder = "Filter priority...",
+                        items = gotifyPriorityOptions,
+                        itemText = { it.second },
+                        onItemSelected = { option ->
+                            if (option != null) priority = option.first
+                        },
+                        isItemSelected = { option -> option.first == priority },
+                        showNoneOption = false,
+                        tooltipText = "Gotify push notification priority scale from 1 (lowest) to 10 (highest). Controls alert sounds and card placement.",
+                        modifier = Modifier.fillMaxWidth()
                     )
                     AutocompleteTextField(
                         value = template,
                         onValueChange = { template = it },
-                        label = { Text("Custom Message Body / Template (supports \${body})") },
+                        label = "Custom Message Body / Template (supports \${body})",
+                        tooltipText = "Custom Gotify message body template. Supports variables like \${body}, \${code}.",
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3
                     )
                 }
                 NodeType.HTTP_ACTION -> {
-                    var expandedMethodMenu by remember { mutableStateOf(false) }
-                    ExposedDropdownMenuBox(
-                        expanded = expandedMethodMenu,
-                        onExpandedChange = { expandedMethodMenu = !expandedMethodMenu }
-                    ) {
-                        OutlinedTextField(
-                            value = httpMethod,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("HTTP Method") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedMethodMenu) },
-                            modifier = Modifier
-                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                                .fillMaxWidth(),
-                            supportingText = { Text("HTTP method (GET, POST, PUT, etc.).", fontSize = 10.sp) }
-                        )
-                        ExposedDropdownMenu(
-                            expanded = expandedMethodMenu,
-                            onDismissRequest = { expandedMethodMenu = false }
-                        ) {
-                            listOf("GET", "POST", "PUT", "PATCH", "DELETE").forEach { method ->
-                                DropdownMenuItem(
-                                    text = { Text(method) },
-                                    onClick = {
-                                        httpMethod = method
-                                        expandedMethodMenu = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    OutlinedTextField(
+                    SearchableDropdownSelector(
+                        selectedItemText = httpMethod,
+                        label = "HTTP Method",
+                        searchPlaceholder = "Filter method...",
+                        items = listOf("GET", "POST", "PUT", "PATCH", "DELETE"),
+                        itemText = { it },
+                        onItemSelected = { method ->
+                            if (method != null) httpMethod = method
+                        },
+                        isItemSelected = { method -> method == httpMethod },
+                        showNoneOption = false,
+                        tooltipText = "HTTP request method (GET, POST, PUT, etc.).",
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    InfoTooltipField(
                         value = httpUrl,
                         onValueChange = { httpUrl = it },
-                        label = { Text("Endpoint URL") },
+                        label = "Endpoint URL",
+                        tooltipText = "Target REST API webhook URL.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Target REST API webhook URL.", fontSize = 10.sp) }
+                        singleLine = true
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = httpQueryParams,
                         onValueChange = { httpQueryParams = it },
-                        label = { Text("Query Parameters (key=value, one per line)") },
+                        label = "Query Parameters (key=value, one per line)",
+                        tooltipText = "URL query string parameters (key=value format, one per line).",
                         modifier = Modifier.fillMaxWidth(),
-                        minLines = 2,
-                        supportingText = { Text("URL query string parameters.", fontSize = 10.sp) }
+                        singleLine = false,
+                        minLines = 2
                     )
                     HeaderInputEditor(
                         headersString = httpHeaders,
@@ -872,41 +873,44 @@ fun NodeConfigBottomSheet(
                     AutocompleteTextField(
                         value = httpBody,
                         onValueChange = { httpBody = it },
-                        label = { Text("Request Body / Payload Template") },
+                        label = "Request Body / Payload Template",
+                        tooltipText = "Request payload body template. Supports JSON string format and variable interpolation \${code}.",
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 4
                     )
                 }
                 NodeType.SEND_NOTIFICATION_ACTION -> {
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = title,
                         onValueChange = { title = it },
-                        label = { Text("Notification Title") },
+                        label = "Notification Title",
+                        tooltipText = "The bold header title displayed on the local Android status bar notification shade on this device.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Local system notification title.", fontSize = 10.sp) }
+                        singleLine = true
                     )
                     AutocompleteTextField(
                         value = template,
                         onValueChange = { template = it },
-                        label = { Text("Notification Message Template") },
+                        label = "Notification Message Template",
+                        tooltipText = "System notification message template. Supports variable interpolation \${body}.",
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3
                     )
                 }
                 NodeType.SEND_SMS_ACTION -> {
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = recipient,
                         onValueChange = { recipient = it },
-                        label = { Text("Recipient Phone Number") },
+                        label = "Recipient Phone Number",
+                        tooltipText = "Destination phone number (including country code) for outgoing SMS.",
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Destination phone number for outgoing SMS.", fontSize = 10.sp) }
+                        singleLine = true
                     )
                     AutocompleteTextField(
                         value = smsBody,
                         onValueChange = { smsBody = it },
-                        label = { Text("SMS Body Template") },
+                        label = "SMS Body Template",
+                        tooltipText = "Outgoing SMS body text template. Supports variable interpolation \${code}.",
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3
                     )
@@ -955,51 +959,33 @@ fun NodeConfigBottomSheet(
                 }
 
                 // Search & Attach Precondition Dropdown
-                ExposedDropdownMenuBox(
-                    expanded = expandedPrecMenu,
-                    onExpandedChange = { expandedPrecMenu = !expandedPrecMenu }
-                ) {
-                    OutlinedTextField(
-                        value = precSearchQuery,
-                        onValueChange = {
-                            precSearchQuery = it
-                            expandedPrecMenu = true
-                        },
-                        label = { Text("🔍 Search & Attach Precondition Rule...") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedPrecMenu) },
-                        modifier = Modifier
-                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                            .fillMaxWidth(),
-                        singleLine = true,
-                        supportingText = { Text("Search and attach vault guard rules.", fontSize = 10.sp) }
-                    )
-
-                    ExposedDropdownMenu(
-                        expanded = expandedPrecMenu,
-                        onDismissRequest = { expandedPrecMenu = false }
-                    ) {
-                        filteredVaultPreconditions.forEach { prec ->
-                            val isAttached = attachedVaultPrecIds.contains(prec.id)
-                            DropdownMenuItem(
-                                text = { Text("${if (isAttached) "✓ " else "+ "} ${prec.name} (${prec.type})") },
-                                onClick = {
-                                    if (isAttached) {
-                                        attachedVaultPrecIds = attachedVaultPrecIds - prec.id
-                                    } else {
-                                        attachedVaultPrecIds = attachedVaultPrecIds + prec.id
-                                    }
-                                }
-                            )
-                        }
-                        DropdownMenuItem(
-                            text = { Text("➕ Create in Preconditions...") },
-                            onClick = {
-                                expandedPrecMenu = false
-                                onDismiss()
+                SearchableDropdownSelector(
+                    selectedItemText = "Search & Attach Precondition Rule...",
+                    label = "Search & Attach Precondition Rule",
+                    searchPlaceholder = "Search preconditions...",
+                    items = vaultPreconditions,
+                    itemText = { prec -> "${prec.name} (${prec.type})" },
+                    onItemSelected = { prec ->
+                        if (prec != null) {
+                            if (attachedVaultPrecIds.contains(prec.id)) {
+                                attachedVaultPrecIds = attachedVaultPrecIds - prec.id
+                            } else {
+                                attachedVaultPrecIds = attachedVaultPrecIds + prec.id
                             }
-                        )
-                    }
-                }
+                        }
+                    },
+                    isItemSelected = { prec -> attachedVaultPrecIds.contains(prec.id) },
+                    isMultiSelect = true,
+                    showNoneOption = false,
+                    onCreateNewClick = {
+                        onRequestCreatePrecondition?.invoke { newPrec ->
+                            attachedVaultPrecIds = attachedVaultPrecIds + newPrec.id
+                        }
+                    },
+                    createNewText = "➕ Create New Precondition...",
+                    tooltipText = "Search and attach saved vault precondition rules that must pass before executing this node.",
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -1024,14 +1010,17 @@ fun NodeConfigBottomSheet(
 fun AutocompleteTextField(
     value: String,
     onValueChange: (String) -> Unit,
-    label: @Composable () -> Unit,
+    label: String,
+    tooltipText: String? = null,
     modifier: Modifier = Modifier,
     minLines: Int = 1,
     singleLine: Boolean = false
 ) {
     val commonVariables = listOf("sender", "body", "code", "http_response", "timestamp", "title", "text", "package", "formatted_payload")
     var expanded by remember { mutableStateOf(false) }
+    var showTooltip by remember { mutableStateOf(false) }
     var filterQuery by remember { mutableStateOf("") }
+    val interactionSource = rememberAlwaysFloatingInteractionSource()
 
     val filteredVars = remember(filterQuery, commonVariables) {
         if (filterQuery.isBlank()) commonVariables else commonVariables.filter { it.contains(filterQuery, ignoreCase = true) }
@@ -1065,28 +1054,91 @@ fun AutocompleteTextField(
                     expanded = false
                 }
             },
-            label = label,
+            label = { Text(label) },
+            interactionSource = interactionSource,
             modifier = Modifier
                 .menuAnchor(MenuAnchorType.PrimaryNotEditable)
                 .fillMaxWidth(),
             minLines = minLines,
             singleLine = singleLine,
             trailingIcon = {
-                IconButton(onClick = { expanded = !expanded }) {
-                    Icon(
-                        imageVector = Icons.Default.Code,
-                        contentDescription = "Insert Variable",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier.pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    if (event.type == PointerEventType.Press) {
+                                        event.changes.forEach { it.consume() }
+                                        filterQuery = ""
+                                        expanded = !expanded
+                                    } else if (event.type == PointerEventType.Release) {
+                                        event.changes.forEach { it.consume() }
+                                    }
+                                }
+                            }
+                        }
+                    ) {
+                        IconButton(onClick = {
+                            filterQuery = ""
+                            expanded = !expanded
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Code,
+                                contentDescription = "Insert Variable",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    if (!tooltipText.isNullOrBlank()) {
+                        Box(
+                            modifier = Modifier.pointerInput(Unit) {
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                                        if (event.type == PointerEventType.Press) {
+                                            event.changes.forEach { it.consume() }
+                                            showTooltip = !showTooltip
+                                        } else if (event.type == PointerEventType.Release) {
+                                            event.changes.forEach { it.consume() }
+                                        }
+                                    }
+                                }
+                            }
+                        ) {
+                            IconButton(onClick = { showTooltip = !showTooltip }) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Field Information",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showTooltip,
+                                onDismissRequest = { showTooltip = false }
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .widthIn(max = 280.dp)
+                                        .padding(12.dp)
+                                ) {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = tooltipText,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
-            },
-            supportingText = {
-                Text(
-                    text = "💡 Type '$' or click ⟨/⟩ to insert variables (${commonVariables.take(4).joinToString(", ")}...)",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontSize = 10.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         )
 
@@ -1099,13 +1151,15 @@ fun AutocompleteTextField(
                     text = { Text("\${$v}", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold) },
                     onClick = {
                         val lastDollarIdx = value.lastIndexOf('$')
-                        if (lastDollarIdx >= 0) {
+                        if (lastDollarIdx >= 0 && lastDollarIdx == value.length - 1) {
                             val prefix = value.substring(0, lastDollarIdx)
                             onValueChange("$prefix\${$v}")
                         } else {
-                            onValueChange("$value\${$v}")
+                            val spacer = if (value.isNotBlank() && !value.endsWith(" ")) " " else ""
+                            onValueChange("$value$spacer\${$v}")
                         }
                         expanded = false
+                        filterQuery = ""
                     }
                 )
             }

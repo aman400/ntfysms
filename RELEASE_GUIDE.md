@@ -11,7 +11,7 @@ Generate a 2048-bit RSA keystore file using Java `keytool`:
 
 ```bash
 keytool -genkey -v -keystore release.keystore \
-  -alias ntfysms_key \
+  -alias zophop_key \
   -keyalg RSA \
   -keysize 2048 \
   -validity 10000
@@ -23,7 +23,7 @@ Pass keystore parameters as environment variables when invoking Gradle:
 ```bash
 KEYSTORE_FILE=release.keystore \
 KEYSTORE_PASSWORD=your_password \
-KEY_ALIAS=ntfysms_key \
+KEY_ALIAS=zophop_key \
 KEY_PASSWORD=your_password \
 ./gradlew assembleRelease
 ```
@@ -50,7 +50,7 @@ Then in your GitHub Repository:
 Navigate to **Settings** → **Secrets and variables** → **Actions** → Add the following Repository Secrets:
 - `KEYSTORE_BASE64`: Content of `keystore_base64.txt`
 - `KEYSTORE_PASSWORD`: Keystore password
-- `KEY_ALIAS`: Keystore alias (e.g. `ntfysms_key`)
+- `KEY_ALIAS`: Keystore alias (e.g. `zophop_key`)
 - `KEY_PASSWORD`: Key password
 
 *(If secrets are omitted, GitHub Actions will fall back to auto-generating signed release builds.)*

@@ -65,6 +65,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberSwipeToDismissBoxState
+import dev.zophop.core.ui.components.InfoTooltipField
+import dev.zophop.core.ui.components.SearchableDropdownSelector
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -79,6 +81,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -113,10 +117,12 @@ fun PreconditionEditorScreen(
     onDismiss: () -> Unit,
     onSave: (PreconditionEntity) -> Unit
 ) {
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+
     var name by remember { mutableStateOf(precondition?.name ?: "") }
     var selectedType by remember { mutableStateOf(precondition?.type ?: PreconditionType.INTERNET_CHECK.name) }
     var isEnabled by remember { mutableStateOf(precondition?.isEnabled ?: (precondition?.type != PreconditionType.CHAINED_CHECK.name)) }
-    var expandedTypeMenu by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showDiscardDialog by remember { mutableStateOf(false) }
     var showSaveConfirmDialog by remember { mutableStateOf(false) }
@@ -130,7 +136,6 @@ fun PreconditionEditorScreen(
     // SIM fields
     var requiredCarrier by remember { mutableStateOf(precondition?.requiredCarrier ?: "") }
     var credentialId by remember { mutableStateOf(precondition?.credentialId ?: "") }
-    var expandedCredMenu by remember { mutableStateOf(false) }
 
     // Failure policy fields
     var onFailureAction by remember { mutableStateOf(precondition?.onFailureAction ?: "FAIL_IMMEDIATELY") }
@@ -356,6 +361,8 @@ fun PreconditionEditorScreen(
                 actions = {
                     Button(
                         onClick = {
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
                             if (name.isBlank()) {
                                 errorMessage = "Precondition name cannot be blank."
                                 return@Button
@@ -386,6 +393,8 @@ fun PreconditionEditorScreen(
             ) {
                 ExtendedFloatingActionButton(
                     onClick = {
+                        keyboardController?.hide()
+                        focusManager.clearFocus()
                         if (isTestingSheet) {
                             showTestStepperSheet = true
                         } else {
@@ -501,12 +510,14 @@ fun PreconditionEditorScreen(
                 }
             }
 
-            OutlinedTextField(
+            InfoTooltipField(
                 value = name,
                 onValueChange = { name = it },
-                label = { Text("Precondition Name") },
+                label = "Precondition Name",
+                tooltipText = "Descriptive title identifying this precondition guard rule.",
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true
+                singleLine = true,
+                enabled = !isTestingSheet
             )
 
             // Direct switch toggle without forced execution
@@ -527,38 +538,21 @@ fun PreconditionEditorScreen(
                 )
             }
 
-            ExposedDropdownMenuBox(
-                expanded = expandedTypeMenu && !isTestingSheet,
-                onExpandedChange = { if (!isTestingSheet) expandedTypeMenu = !expandedTypeMenu }
-            ) {
-                val selectedLabel = typeOptions.find { it.first == selectedType }?.second ?: selectedType
-                OutlinedTextField(
-                    value = selectedLabel,
-                    onValueChange = {},
-                    readOnly = true,
-                    enabled = !isTestingSheet,
-                    label = { Text("Precondition Type") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedTypeMenu) },
-                    modifier = Modifier
-                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth()
-                )
+            val selectedTypeOption = typeOptions.find { it.first == selectedType } ?: typeOptions.first()
 
-                ExposedDropdownMenu(
-                    expanded = expandedTypeMenu && !isTestingSheet,
-                    onDismissRequest = { expandedTypeMenu = false }
-                ) {
-                    typeOptions.forEach { (typeVal, label) ->
-                        DropdownMenuItem(
-                            text = { Text(label) },
-                            onClick = {
-                                selectedType = typeVal
-                                expandedTypeMenu = false
-                            }
-                        )
-                    }
-                }
-            }
+            SearchableDropdownSelector(
+                selectedItemText = selectedTypeOption.second,
+                label = "Precondition Type",
+                searchPlaceholder = "Filter type...",
+                items = typeOptions,
+                itemText = { it.second },
+                onItemSelected = { option ->
+                    if (option != null) selectedType = option.first
+                },
+                showNoneOption = false,
+                tooltipText = "Select the environmental precondition type to evaluate.",
+                modifier = Modifier.fillMaxWidth()
+            )
 
             when (selectedType) {
                 PreconditionType.INTERNET_CHECK.name -> {
@@ -588,10 +582,11 @@ fun PreconditionEditorScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = requiredCarrier,
                         onValueChange = { requiredCarrier = it },
-                        label = { Text("Required Carrier Name (Optional)") },
+                        label = "Required Carrier Name (Optional)",
+                        tooltipText = "Optional cellular carrier name requirement (e.g. Jio, Airtel, T-Mobile).",
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         enabled = !isTestingSheet
@@ -604,82 +599,64 @@ fun PreconditionEditorScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = targetUrl,
                         onValueChange = { targetUrl = it },
-                        label = { Text("Healthcheck Target URL") },
+                        label = "Healthcheck Target URL",
+                        tooltipText = "Probe endpoint URL evaluated for HTTP status code response (e.g. https://my-server.com/healthz).",
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         enabled = !isTestingSheet
                     )
 
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = method,
                         onValueChange = { method = it },
-                        label = { Text("HTTP Method (GET, HEAD, POST)") },
+                        label = "HTTP Method (GET, HEAD, POST)",
+                        tooltipText = "HTTP request method used during pre-flight endpoint health probing.",
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         enabled = !isTestingSheet
                     )
 
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = expectedStatus,
                         onValueChange = { expectedStatus = it },
-                        label = { Text("Expected Status Code (Default 200)") },
+                        label = "Expected Status Code (Default 200)",
+                        tooltipText = "Expected HTTP response status integer indicating a healthy endpoint (default 200 or 204).",
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
                         enabled = !isTestingSheet
                     )
 
-                    OutlinedTextField(
+                    InfoTooltipField(
                         value = headers,
                         onValueChange = { headers = it },
-                        label = { Text("Headers (Key: Value)") },
+                        label = "Headers (Key: Value)",
+                        tooltipText = "Custom HTTP headers included during health probing (e.g. Authorization: Bearer token123).",
                         modifier = Modifier.fillMaxWidth(),
+                        singleLine = false,
                         minLines = 2,
                         enabled = !isTestingSheet
                     )
 
-                    val selectedCredName = credentials.find { it.id == credentialId }?.name ?: "None (Optional Auth)"
+                    val selectedCred = credentials.find { it.id == credentialId }
+                    val selectedCredName = selectedCred?.let { "🔑 ${it.name} (${it.type.name})" } ?: "None (Optional Auth)"
 
-                    ExposedDropdownMenuBox(
-                        expanded = expandedCredMenu && !isTestingSheet,
-                        onExpandedChange = { if (!isTestingSheet) expandedCredMenu = !expandedCredMenu }
-                    ) {
-                        OutlinedTextField(
-                            value = selectedCredName,
-                            onValueChange = {},
-                            readOnly = true,
-                            enabled = !isTestingSheet,
-                            label = { Text("Attach Saved Credential") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCredMenu) },
-                            modifier = Modifier
-                                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                                .fillMaxWidth()
-                        )
-
-                        ExposedDropdownMenu(
-                            expanded = expandedCredMenu && !isTestingSheet,
-                            onDismissRequest = { expandedCredMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("None") },
-                                onClick = {
-                                    credentialId = ""
-                                    expandedCredMenu = false
-                                }
-                            )
-                            credentials.forEach { cred ->
-                                DropdownMenuItem(
-                                    text = { Text("${cred.name} (${cred.type.name})") },
-                                    onClick = {
-                                        credentialId = cred.id
-                                        expandedCredMenu = false
-                                    }
-                                )
-                            }
-                        }
-                    }
+                    SearchableDropdownSelector(
+                        selectedItemText = selectedCredName,
+                        label = "🔑 Attach Saved Credential",
+                        searchPlaceholder = "Search credentials...",
+                        items = credentials,
+                        itemText = { cred -> "🔑 ${cred.name} (${cred.type.name})" },
+                        onItemSelected = { cred ->
+                            credentialId = cred?.id ?: ""
+                        },
+                        showNoneOption = true,
+                        noneOptionText = "None",
+                        tooltipText = "Attach saved vault credentials for authenticated HTTP endpoint probing.",
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
                 PreconditionType.CHAINED_CHECK.name -> {
                     Text(
@@ -943,6 +920,8 @@ fun PreconditionEditorScreen(
             confirmButton = {
                 Button(
                     onClick = {
+                        keyboardController?.hide()
+                        focusManager.clearFocus()
                         showSaveConfirmDialog = false
                         val entity = (precondition ?: PreconditionEntity(
                             id = UUID.randomUUID().toString(),

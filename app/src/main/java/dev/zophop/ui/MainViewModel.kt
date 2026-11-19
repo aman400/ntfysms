@@ -75,6 +75,7 @@ data class MainUiState(
     val autoClearMinutes: String = "1440",
     val lockCredentialsWithBiometric: Boolean = false,
     val globalWorkflowsEnabled: Boolean = true,
+    val dismissedBiometricBanner: Boolean = false,
     val isRegexValid: Boolean = true,
     val isUrlValid: Boolean = true,
     val isSendingTest: Boolean = false,
@@ -175,6 +176,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             autoClearMinutes = s.autoClearMinutes.toString(),
             lockCredentialsWithBiometric = s.lockCredentialsWithBiometric,
             globalWorkflowsEnabled = s.globalWorkflowsEnabled,
+            dismissedBiometricBanner = s.dismissedBiometricBanner,
             isRegexValid = SmsFilter.isValidRegex(s.keywordRegex),
             isUrlValid = true,
             isBatteryOptimized = checkBatteryOptimizedInternal(),
@@ -277,6 +279,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleGlobalWorkflowsEnabled(enable: Boolean) {
         _uiState.value = _uiState.value.copy(globalWorkflowsEnabled = enable)
+        saveCurrentSettings()
+    }
+
+    fun dismissBiometricBanner() {
+        _uiState.value = _uiState.value.copy(dismissedBiometricBanner = true)
         saveCurrentSettings()
     }
 
@@ -643,7 +650,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             autoClearEnabled = current.autoClearEnabled,
             autoClearMinutes = current.autoClearMinutes.toIntOrNull() ?: 1440,
             lockCredentialsWithBiometric = current.lockCredentialsWithBiometric,
-            globalWorkflowsEnabled = current.globalWorkflowsEnabled
+            globalWorkflowsEnabled = current.globalWorkflowsEnabled,
+            dismissedBiometricBanner = current.dismissedBiometricBanner
         )
         settingsRepo.saveSettings(settings)
     }

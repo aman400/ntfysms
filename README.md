@@ -22,7 +22,7 @@ It is designed for personal use, home lab owners, and self-hosters running serve
 
 - **📖 [Full User & Setup Manual](DOCUMENTATION.md)** — Comprehensive guide covering ntfy & Gotify setup, Tailscale VPN integration, regex extraction, and OEM battery settings.
 - **📦 [Signed Release & GitHub Publishing Guide](RELEASE_GUIDE.md)** — Guide on building signed release APKs (`ZopHop-v1.0.0.apk`) and setting up GitHub Actions.
-- **🌐 [GitHub Pages Landing Page](https://aman400.github.io/ntfysms)** — Web documentation and APK download showcase.
+- **🌐 [GitHub Pages Landing Page](https://aman400.github.io/zophop)** — Web documentation and APK download showcase.
 
 ---
 

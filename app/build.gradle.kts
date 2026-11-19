@@ -24,9 +24,9 @@ android {
             val storeFileObj = file(keystoreFile)
             if (storeFileObj.exists()) {
                 storeFile = storeFileObj
-                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "ntfysms_secret"
-                keyAlias = System.getenv("KEY_ALIAS") ?: "ntfysms_key"
-                keyPassword = System.getenv("KEY_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD") ?: "ntfysms_secret"
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "zophop_secret"
+                keyAlias = System.getenv("KEY_ALIAS") ?: "zophop_key"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: System.getenv("KEYSTORE_PASSWORD") ?: "zophop_secret"
             }
         }
     }
@@ -98,6 +98,7 @@ dependencies {
     implementation(project(":feature:preconditions"))
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -120,6 +121,11 @@ dependencies {
     implementation(libs.androidx.security.crypto)
 
     testImplementation(libs.junit)
+    testImplementation(libs.androidx.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.work.testing)
     testImplementation(libs.json)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

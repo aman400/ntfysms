@@ -87,6 +87,7 @@ fun MainAppScreen(
     var activeLogsWorkflow by remember { mutableStateOf<Workflow?>(null) }
     var activeEditingPrecondition by remember { mutableStateOf<PreconditionEntity?>(null) }
     var showAddPreconditionScreen by remember { mutableStateOf(false) }
+    var activeCreatePreconditionCallback by remember { mutableStateOf<((PreconditionEntity) -> Unit)?>(null) }
 
     val uiState by viewModel.uiState.collectAsState()
     val workflows by viewModel.workflows.collectAsState()
@@ -159,6 +160,9 @@ fun MainAppScreen(
                     },
                     onSavePrecondition = { newPrec ->
                         viewModel.savePrecondition(newPrec)
+                    },
+                    onRequestCreatePrecondition = { onCreated ->
+                        activeCreatePreconditionCallback = onCreated
                     }
                 )
             }
@@ -464,5 +468,21 @@ fun MainAppScreen(
                 onDismiss = { showActiveExecutionSheet = false }
             )
         }
+    }
+
+    if (activeCreatePreconditionCallback != null) {
+        PreconditionEditorScreen(
+            precondition = null,
+            credentials = credentials,
+            onTestPreconditionWithProgress = { entity, onProgress, onResult ->
+                viewModel.testPreconditionWithProgress(entity, onProgress, onResult)
+            },
+            onDismiss = { activeCreatePreconditionCallback = null },
+            onSave = { newPrec ->
+                viewModel.savePrecondition(newPrec)
+                activeCreatePreconditionCallback?.invoke(newPrec)
+                activeCreatePreconditionCallback = null
+            }
+        )
     }
 }

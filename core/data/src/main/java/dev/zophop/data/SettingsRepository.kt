@@ -28,7 +28,8 @@ data class AppSettings(
     val autoClearEnabled: Boolean = false,
     val autoClearMinutes: Int = 1440,
     val lockCredentialsWithBiometric: Boolean = false,
-    val globalWorkflowsEnabled: Boolean = true
+    val globalWorkflowsEnabled: Boolean = true,
+    val dismissedBiometricBanner: Boolean = false
 ) {
     val allowlistItems: List<String>
         get() = allowlist.split(",", "\n").map { it.trim() }.filter { it.isNotEmpty() }
@@ -113,7 +114,8 @@ class EncryptedSettingsRepository(context: Context) : SettingsRepository {
             autoClearEnabled = prefs.getBoolean(KEY_AUTO_CLEAR_ENABLED, false),
             autoClearMinutes = prefs.getInt(KEY_AUTO_CLEAR_MINUTES, 1440),
             lockCredentialsWithBiometric = prefs.getBoolean(KEY_LOCK_CREDENTIALS_WITH_BIOMETRIC, false),
-            globalWorkflowsEnabled = prefs.getBoolean(KEY_GLOBAL_WORKFLOWS_ENABLED, true)
+            globalWorkflowsEnabled = prefs.getBoolean(KEY_GLOBAL_WORKFLOWS_ENABLED, true),
+            dismissedBiometricBanner = prefs.getBoolean(KEY_DISMISSED_BIOMETRIC_BANNER, false)
         )
     }
 
@@ -137,6 +139,7 @@ class EncryptedSettingsRepository(context: Context) : SettingsRepository {
             .putInt(KEY_AUTO_CLEAR_MINUTES, settings.autoClearMinutes)
             .putBoolean(KEY_LOCK_CREDENTIALS_WITH_BIOMETRIC, settings.lockCredentialsWithBiometric)
             .putBoolean(KEY_GLOBAL_WORKFLOWS_ENABLED, settings.globalWorkflowsEnabled)
+            .putBoolean(KEY_DISMISSED_BIOMETRIC_BANNER, settings.dismissedBiometricBanner)
             .apply()
     }
 
@@ -173,6 +176,7 @@ class EncryptedSettingsRepository(context: Context) : SettingsRepository {
         private const val KEY_AUTO_CLEAR_MINUTES = "auto_clear_minutes"
         private const val KEY_LOCK_CREDENTIALS_WITH_BIOMETRIC = "lock_credentials_with_biometric"
         private const val KEY_GLOBAL_WORKFLOWS_ENABLED = "global_workflows_enabled"
+        private const val KEY_DISMISSED_BIOMETRIC_BANNER = "dismissed_biometric_banner"
 
         fun serializeNodes(nodes: List<DeliveryNode>): String {
             return nodes.joinToString("|||") { node ->
