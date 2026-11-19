@@ -31,6 +31,7 @@ import dev.zophop.domain.engine.PreconditionEvaluator
 import org.json.JSONObject
 import dev.zophop.domain.engine.WorkflowEngine
 import dev.zophop.domain.engine.WorkflowExecutionResult
+import dev.zophop.domain.engine.toJsonString
 import dev.zophop.domain.model.Credential
 import dev.zophop.domain.model.NodeType
 import dev.zophop.domain.model.Workflow
@@ -93,7 +94,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val settingsRepo = EncryptedSettingsRepository(application)
     private val db = AppDatabase.getInstance(application)
     private val forwardingManager = ForwardingManager.getInstance(application)
-    val workflowRepository: WorkflowRepository = RoomWorkflowRepository(db.workflowDao())
+    val workflowRepository: WorkflowRepository = RoomWorkflowRepository(db.workflowDao(), db.preconditionDao())
     val credentialRepository: CredentialRepository = RoomCredentialRepository(db.credentialDao())
     val preconditionRepository: PreconditionRepository = RoomPreconditionRepository(db.preconditionDao())
     private val workflowInitializer = DefaultWorkflowInitializer(workflowRepository)
@@ -104,12 +105,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _activeExecutionState = MutableStateFlow<ActiveExecutionState?>(null)
     val activeExecutionState: StateFlow<ActiveExecutionState?> = _activeExecutionState.asStateFlow()
 
-    val workflows: StateFlow<List<Workflow>> = workflowRepository.getAllWorkflowsFlow()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    val workflows: StateFlow<List<Workflow>> = kotlinx.coroutines.flow.combine(
+        workflowRepository.getAllWorkflowsFlow(),
+        preconditionRepository.getAllPreconditionsFlow()
+    ) { workflowList, preconditionEntities ->
+        val precMap = preconditionEntities.associateBy { it.id }
+        workflowList.map { workflow ->
+            workflow.copy(
+                nodes = workflow.nodes.map { node ->
+                    if (node.preconditions.isEmpty()) node
+                    else node.copy(
+                        preconditions = node.preconditions.map { prec ->
+                            val latestEntity = precMap[prec.id] ?: precMap.values.find { it.type == prec.type.name }
+                            latestEntity?.toDomain() ?: prec
+                        }
+                    )
+                }
+            )
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     val credentials: StateFlow<List<Credential>> = credentialRepository.getAllCredentialsFlow()
         .stateIn(
@@ -515,13 +533,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 result = result
             )
 
-            val logMsg = when (result) {
-                is WorkflowExecutionResult.Success -> "✅ Retry Success!\n" + result.logs.joinToString("\n")
-                is WorkflowExecutionResult.PreconditionFailed -> "⏳ Retry Precondition Failed: ${result.reason}\n" + result.logs.joinToString("\n")
-                is WorkflowExecutionResult.Failed -> "❌ Retry Failed: ${result.reason}\n" + result.logs.joinToString("\n")
-                is WorkflowExecutionResult.Cancelled -> "🛑 Cancelled: Workflow manually cancelled by user\n" + result.logs.joinToString("\n")
-            }
-
             val logEntity = WorkflowExecutionLogEntity(
                 id = UUID.randomUUID().toString(),
                 workflowId = workflow.id,
@@ -533,7 +544,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 },
                 timestamp = System.currentTimeMillis(),
                 messageId = null,
-                logs = logMsg,
+                logs = result.steps.toJsonString(),
                 errorReason = when (result) {
                     is WorkflowExecutionResult.Success -> null
                     is WorkflowExecutionResult.PreconditionFailed -> result.reason

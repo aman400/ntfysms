@@ -113,6 +113,9 @@ class MainViewModelTest {
         viewModel.toggleShowWorkflowNotifications(false)
         assertFalse(viewModel.uiState.value.showWorkflowNotifications)
 
+        viewModel.toggleShowWorkflowNotifications(true)
+        assertTrue(viewModel.uiState.value.showWorkflowNotifications)
+
         viewModel.toggleLockCredentialsWithBiometric(true)
         assertTrue(viewModel.uiState.value.lockCredentialsWithBiometric)
 

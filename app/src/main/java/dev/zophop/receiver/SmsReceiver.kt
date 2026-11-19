@@ -13,7 +13,9 @@ import dev.zophop.data.WorkflowExecutionLogEntity
 import dev.zophop.domain.engine.ExecutionContext
 import dev.zophop.domain.engine.PreconditionEvaluator
 import dev.zophop.domain.engine.WorkflowEngine
+import dev.zophop.domain.engine.ExecutionJobRegistry
 import dev.zophop.domain.engine.WorkflowExecutionResult
+import dev.zophop.domain.engine.toJsonString
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -41,7 +43,7 @@ class SmsReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val db = AppDatabase.getInstance(context)
-                val workflowRepository = RoomWorkflowRepository(db.workflowDao())
+                val workflowRepository = RoomWorkflowRepository(db.workflowDao(), db.preconditionDao())
                 val credentialRepository = RoomCredentialRepository(db.credentialDao())
 
                 DefaultWorkflowInitializer(workflowRepository).checkAndInitialize()
@@ -59,32 +61,31 @@ class SmsReceiver : BroadcastReceiver() {
                 )
 
                 for (workflow in activeWorkflows) {
-                    val result = engine.executeWorkflow(workflow, execContext, context)
-                    val logEntity = WorkflowExecutionLogEntity(
-                        id = UUID.randomUUID().toString(),
-                        workflowId = workflow.id,
-                        status = when (result) {
-                            is WorkflowExecutionResult.Success -> "SUCCESS"
-                            is WorkflowExecutionResult.PreconditionFailed -> "PRECONDITION_FAILED"
-                            is WorkflowExecutionResult.Failed -> "FAILED"
-                            is WorkflowExecutionResult.Cancelled -> "CANCELLED"
-                        },
-                        timestamp = System.currentTimeMillis(),
-                        messageId = null,
-                        logs = when (result) {
-                            is WorkflowExecutionResult.Success -> result.logs.joinToString("\n")
-                            is WorkflowExecutionResult.PreconditionFailed -> result.logs.joinToString("\n")
-                            is WorkflowExecutionResult.Failed -> result.logs.joinToString("\n")
-                            is WorkflowExecutionResult.Cancelled -> result.logs.joinToString("\n")
-                        },
-                        errorReason = when (result) {
-                            is WorkflowExecutionResult.Success -> null
-                            is WorkflowExecutionResult.PreconditionFailed -> result.reason
-                            is WorkflowExecutionResult.Failed -> result.reason
-                            is WorkflowExecutionResult.Cancelled -> "Execution cancelled by user"
-                        }
-                    )
-                    workflowRepository.saveExecutionLog(logEntity)
+                    val job = launch {
+                        val result = engine.executeWorkflow(workflow, execContext, context)
+                        val logEntity = WorkflowExecutionLogEntity(
+                            id = UUID.randomUUID().toString(),
+                            workflowId = workflow.id,
+                            status = when (result) {
+                                is WorkflowExecutionResult.Success -> "SUCCESS"
+                                is WorkflowExecutionResult.PreconditionFailed -> "PRECONDITION_FAILED"
+                                is WorkflowExecutionResult.Failed -> "FAILED"
+                                is WorkflowExecutionResult.Cancelled -> "CANCELLED"
+                            },
+                            timestamp = System.currentTimeMillis(),
+                            messageId = null,
+                            logs = result.steps.toJsonString(),
+                            errorReason = when (result) {
+                                is WorkflowExecutionResult.Success -> null
+                                is WorkflowExecutionResult.PreconditionFailed -> result.reason
+                                is WorkflowExecutionResult.Failed -> result.reason
+                                is WorkflowExecutionResult.Cancelled -> "Execution cancelled by user"
+                            }
+                        )
+                        workflowRepository.saveExecutionLog(logEntity)
+                    }
+                    ExecutionJobRegistry.registerJob(workflow.id, job)
+                    job.join()
                 }
             } catch (_: Exception) {
             } finally {

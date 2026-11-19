@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -86,6 +87,9 @@ fun CredentialBottomSheet(
         var ntfyTopic by remember { mutableStateOf(dataMap["topic"] ?: "") }
         var gotifyUrl by remember { mutableStateOf(dataMap["serverUrl"] ?: "https://gotify.example.com") }
         var gotifyToken by remember { mutableStateOf(dataMap["appToken"] ?: "") }
+
+        var showEditConfirmationDialog by remember { mutableStateOf(false) }
+        var pendingSavedCredential by remember { mutableStateOf<Credential?>(null) }
 
         Scaffold(
             topBar = {
@@ -181,7 +185,12 @@ fun CredentialBottomSheet(
                                     dataMap = newDataMap,
                                     updatedAt = System.currentTimeMillis()
                                 )
-                                onSave(updated)
+                                if (credential != null && (linkedWorkflowCount > 0 || linkedPreconditionCount > 0)) {
+                                    pendingSavedCredential = updated
+                                    showEditConfirmationDialog = true
+                                } else {
+                                    onSave(updated)
+                                }
                             }
                         ) {
                             Text("Save Credential")
@@ -390,6 +399,35 @@ fun CredentialBottomSheet(
 
                 Spacer(modifier = Modifier.height(36.dp))
             }
+        }
+
+        if (showEditConfirmationDialog && pendingSavedCredential != null) {
+            AlertDialog(
+                onDismissRequest = { showEditConfirmationDialog = false },
+                title = { Text("Update Credential In Use?") },
+                text = {
+                    Text("This credential is currently used by $linkedWorkflowCount workflow(s) and $linkedPreconditionCount precondition(s). Updating its authentication details will immediately affect their execution behavior.")
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            pendingSavedCredential?.let { onSave(it) }
+                            showEditConfirmationDialog = false
+                        }
+                    ) {
+                        Text("Save Changes")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            showEditConfirmationDialog = false
+                        }
+                    ) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
     }
 }

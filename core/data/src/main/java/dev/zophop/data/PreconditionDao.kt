@@ -11,6 +11,9 @@ interface PreconditionDao {
     @Query("SELECT * FROM preconditions ORDER BY updatedAt DESC")
     fun getAllPreconditionsFlow(): Flow<List<PreconditionEntity>>
 
+    @Query("SELECT * FROM preconditions")
+    suspend fun getAllPreconditions(): List<PreconditionEntity>
+
     @Query("SELECT * FROM preconditions WHERE id = :id")
     suspend fun getPreconditionById(id: String): PreconditionEntity?
 

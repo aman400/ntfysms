@@ -1,33 +1,29 @@
 package dev.zophop.ui.preconditions
 
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import dev.zophop.data.toDomain
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
@@ -38,24 +34,19 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FabPosition
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
@@ -65,8 +56,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberSwipeToDismissBoxState
-import dev.zophop.core.ui.components.InfoTooltipField
-import dev.zophop.core.ui.components.SearchableDropdownSelector
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,7 +69,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
@@ -88,18 +76,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import dev.zophop.core.ui.components.InfoTooltipField
 import dev.zophop.core.ui.components.NoSwipeBottomSheet
+import dev.zophop.core.ui.components.SearchableDropdownSelector
 import dev.zophop.data.PreconditionEntity
+import dev.zophop.data.toDomain
 import dev.zophop.domain.engine.NodeExecutionStep
 import dev.zophop.domain.engine.PreconditionResult
 import dev.zophop.domain.model.Credential
 import dev.zophop.domain.model.NodeType
 import dev.zophop.domain.model.Precondition
 import dev.zophop.domain.model.PreconditionType
+import dev.zophop.domain.model.Workflow
 import dev.zophop.domain.model.WorkflowConnection
 import dev.zophop.domain.model.WorkflowNode
 import dev.zophop.ui.workflows.NodeConfigBottomSheet
-import dev.zophop.ui.workflows.NodeExecutionStepper
 import dev.zophop.ui.workflows.WorkflowUiHelper
 import org.json.JSONArray
 import org.json.JSONObject
@@ -113,12 +104,23 @@ import java.util.UUID
 fun PreconditionEditorScreen(
     precondition: PreconditionEntity?,
     credentials: List<Credential> = emptyList(),
+    workflows: List<Workflow> = emptyList(),
     onTestPreconditionWithProgress: ((PreconditionEntity, (List<NodeExecutionStep>) -> Unit, (PreconditionResult) -> Unit) -> Unit)? = null,
     onDismiss: () -> Unit,
     onSave: (PreconditionEntity) -> Unit
 ) {
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val localContext = LocalContext.current
+
+    var showNotificationPermissionRationaleDialog by remember { mutableStateOf(false) }
+
+    val linkedWorkflows = remember(workflows, precondition) {
+        if (precondition == null) emptyList()
+        else workflows.filter { wf ->
+            wf.nodes.any { node -> node.preconditions.any { p -> p.id == precondition.id } }
+        }
+    }
 
     var name by remember { mutableStateOf(precondition?.name ?: "") }
     var selectedType by remember { mutableStateOf(precondition?.type ?: PreconditionType.INTERNET_CHECK.name) }
@@ -554,6 +556,22 @@ fun PreconditionEditorScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
+            Spacer(modifier = Modifier.height(4.dp))
+
+            FailurePolicyAccordion(
+                onFailureAction = onFailureAction,
+                onFailureActionChanged = { onFailureAction = it },
+                maxRetries = maxRetries,
+                onMaxRetriesChanged = { maxRetries = it },
+                retryIntervalSeconds = retryIntervalSeconds,
+                onRetryIntervalSecondsChanged = { retryIntervalSeconds = it },
+                showNotificationOnFailure = showNotificationOnFailure,
+                onShowNotificationOnFailureChanged = { showNotificationOnFailure = it },
+                onShowNotificationRationale = { showNotificationPermissionRationaleDialog = true }
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
             when (selectedType) {
                 PreconditionType.INTERNET_CHECK.name -> {
                     Text(
@@ -663,20 +681,6 @@ fun PreconditionEditorScreen(
                         text = "Chained Pipeline: Execute an HTTP request, parse data (JSON/Regex), and evaluate with a condition check.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    // Failure Policy Accordion moved above pipeline steps
-                    FailurePolicyAccordion(
-                        onFailureAction = onFailureAction,
-                        onFailureActionChanged = { onFailureAction = it },
-                        maxRetries = maxRetries,
-                        onMaxRetriesChanged = { maxRetries = it },
-                        retryIntervalSeconds = retryIntervalSeconds,
-                        onRetryIntervalSecondsChanged = { retryIntervalSeconds = it },
-                        showNotificationOnFailure = showNotificationOnFailure,
-                        onShowNotificationOnFailureChanged = { showNotificationOnFailure = it }
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
@@ -883,6 +887,39 @@ fun PreconditionEditorScreen(
                     modifier = Modifier.verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    if (linkedWorkflows.isNotEmpty()) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "⚠️ WARNING: Precondition In Use!",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                Text(
+                                    text = "This precondition is currently attached to ${linkedWorkflows.size} workflow(s):",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                linkedWorkflows.forEach { wf ->
+                                    Text("• ${wf.name}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer, fontSize = 12.sp)
+                                }
+                                Text(
+                                    text = "Saving these changes will immediately modify execution behavior across these workflows.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                    }
+
                     Text("Here is a summary of new changes to be saved:")
                     if (nameChanged) {
                         Text("• Name: '${precondition?.name ?: ""}' → '$name'", fontWeight = FontWeight.Bold)
@@ -952,6 +989,36 @@ fun PreconditionEditorScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showSaveConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showNotificationPermissionRationaleDialog) {
+        AlertDialog(
+            onDismissRequest = { showNotificationPermissionRationaleDialog = false },
+            title = { Text("Notification Permission Required") },
+            text = {
+                Text("To display failure notifications for precondition checks, please enable notifications in the app's settings.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showNotificationPermissionRationaleDialog = false
+                        try {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", localContext.packageName, null)
+                            }
+                            localContext.startActivity(intent)
+                        } catch (_: Exception) {}
+                    }
+                ) {
+                    Text("Open Settings")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNotificationPermissionRationaleDialog = false }) {
                     Text("Cancel")
                 }
             }
@@ -1028,7 +1095,8 @@ fun FailurePolicyAccordion(
     retryIntervalSeconds: String,
     onRetryIntervalSecondsChanged: (String) -> Unit,
     showNotificationOnFailure: Boolean,
-    onShowNotificationOnFailureChanged: (Boolean) -> Unit
+    onShowNotificationOnFailureChanged: (Boolean) -> Unit,
+    onShowNotificationRationale: () -> Unit = {}
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -1038,7 +1106,7 @@ fun FailurePolicyAccordion(
         colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
+            modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
@@ -1048,17 +1116,30 @@ fun FailurePolicyAccordion(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Failure & Retry Policy",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
                     )
-                    Text(
-                        text = if (expanded) "Configure retry attempts and failure response" else "Action: $onFailureAction • Retries: $maxRetries",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column {
+                        Text(
+                            text = "Failure & Retry Policy",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        val actionDesc = if (onFailureAction == "RETRY") "Wait & Retry ($maxRetries attempts)" else "Fail Immediately"
+                        Text(
+                            text = if (expanded) "Configure retry attempts and failure response" else actionDesc,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 IconButton(onClick = { expanded = !expanded }) {
                     Icon(
@@ -1078,7 +1159,8 @@ fun FailurePolicyAccordion(
                     retryIntervalSeconds = retryIntervalSeconds,
                     onRetryIntervalSecondsChanged = onRetryIntervalSecondsChanged,
                     showNotificationOnFailure = showNotificationOnFailure,
-                    onShowNotificationOnFailureChanged = onShowNotificationOnFailureChanged
+                    onShowNotificationOnFailureChanged = onShowNotificationOnFailureChanged,
+                    onShowNotificationRationale = onShowNotificationRationale
                 )
             }
         }

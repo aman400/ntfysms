@@ -274,4 +274,72 @@ class WorkflowAndPreconditionRetryTest {
         assertTrue(result is PreconditionResult.Passed)
         assertEquals(2, attempts)
     }
+
+    @Test
+    fun testPreconditionFailImmediatelyPolicy() = runTest {
+        var attempts = 0
+        val client = OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                attempts++
+                Response.Builder()
+                    .request(chain.request())
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(500)
+                    .message("Internal Server Error")
+                    .body("error".toResponseBody())
+                    .build()
+            }
+            .build()
+
+        val evaluator = PreconditionEvaluator(context = null, okHttpClient = client)
+        val healthCheck = Precondition.HealthCheck(
+            id = "prec_fail_now",
+            isEnabled = true,
+            targetUrl = "https://example.com/healthz",
+            expectedStatus = 200,
+            onFailureAction = "FAIL_IMMEDIATELY",
+            maxRetries = 3,
+            retryIntervalSeconds = 1
+        )
+
+        val result = evaluator.evaluate(healthCheck)
+
+        assertTrue(result is PreconditionResult.Failed)
+        assertEquals(1, attempts)
+    }
+
+    @Test
+    fun testPreconditionMaxRetriesExhaustedFailure() = runTest {
+        var attempts = 0
+        val client = OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                attempts++
+                Response.Builder()
+                    .request(chain.request())
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(503)
+                    .message("Service Unavailable")
+                    .body("busy".toResponseBody())
+                    .build()
+            }
+            .build()
+
+        val evaluator = PreconditionEvaluator(context = null, okHttpClient = client)
+        val healthCheck = Precondition.HealthCheck(
+            id = "prec_exhaust",
+            isEnabled = true,
+            targetUrl = "https://example.com/healthz",
+            expectedStatus = 200,
+            onFailureAction = "RETRY",
+            maxRetries = 2,
+            retryIntervalSeconds = 1
+        )
+
+        val result = evaluator.evaluate(healthCheck)
+
+        assertTrue(result is PreconditionResult.Failed)
+        // Initial attempt + 2 retries = 3 total attempts
+        assertEquals(3, attempts)
+    }
 }
+

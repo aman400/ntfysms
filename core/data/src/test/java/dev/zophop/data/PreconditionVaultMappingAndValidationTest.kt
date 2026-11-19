@@ -3,6 +3,8 @@ package dev.zophop.data
 import dev.zophop.domain.model.NodeType
 import dev.zophop.domain.model.Precondition
 import dev.zophop.domain.model.PreconditionType
+import dev.zophop.domain.model.Workflow
+import dev.zophop.domain.model.WorkflowNode
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -177,5 +179,47 @@ class PreconditionVaultMappingAndValidationTest {
         val domain = entity.toDomain()
         assertTrue(domain is Precondition.InternetCheck)
         assertEquals("prec_unknown", domain.id)
+    }
+
+    @Test
+    fun testPreconditionWorkflowUsageLinking() {
+        val precId = "prec_target"
+        val precondition = Precondition.InternetCheck(id = precId, isEnabled = true)
+
+        val nodeWithPrecondition = WorkflowNode(
+            id = "node_1",
+            name = "Test Action",
+            type = NodeType.NTFY_ACTION,
+            preconditions = listOf(precondition)
+        )
+
+        val nodeWithoutPrecondition = WorkflowNode(
+            id = "node_2",
+            name = "Other Action",
+            type = NodeType.NTFY_ACTION,
+            preconditions = emptyList()
+        )
+
+        val workflowLinked = Workflow(
+            id = "wf_1",
+            name = "Linked Workflow",
+            nodes = listOf(nodeWithPrecondition)
+        )
+
+        val workflowUnlinked = Workflow(
+            id = "wf_2",
+            name = "Unlinked Workflow",
+            nodes = listOf(nodeWithoutPrecondition)
+        )
+
+        val workflows = listOf(workflowLinked, workflowUnlinked)
+
+        val linkedWorkflows = workflows.filter { wf ->
+            wf.nodes.any { node -> node.preconditions.any { p -> p.id == precId } }
+        }
+
+        assertEquals(1, linkedWorkflows.size)
+        assertEquals("wf_1", linkedWorkflows[0].id)
+        assertEquals("Linked Workflow", linkedWorkflows[0].name)
     }
 }

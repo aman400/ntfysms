@@ -207,7 +207,7 @@ fun NodeConfigBottomSheet(
     var attachedVaultPrecIds by remember {
         mutableStateOf(
             vaultPreconditions.filter { prec ->
-                node.preconditions.any { it.type.name == prec.type }
+                node.preconditions.any { it.id == prec.id || it.type.name == prec.type }
             }.map { it.id }.toSet()
         )
     }
@@ -943,14 +943,15 @@ fun NodeConfigBottomSheet(
                         attachedVaultPrecIds.forEach { precId ->
                             val vaultPrec = vaultPreconditions.find { it.id == precId }
                             if (vaultPrec != null) {
+                                val isEnabled = vaultPrec.isEnabled
                                 SuggestionChip(
                                     onClick = {
                                         attachedVaultPrecIds = attachedVaultPrecIds - precId
                                     },
-                                    label = { Text("🔒 ${vaultPrec.name} ✕") },
+                                    label = { Text("🔒 ${vaultPrec.name}" + if (!isEnabled) " (Disabled)" else "" + " ✕") },
                                     colors = SuggestionChipDefaults.suggestionChipColors(
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        labelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                        containerColor = if (isEnabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                        labelColor = if (isEnabled) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                     )
                                 )
                             }
@@ -963,7 +964,7 @@ fun NodeConfigBottomSheet(
                     selectedItemText = "Search & Attach Precondition Rule...",
                     label = "Search & Attach Precondition Rule",
                     searchPlaceholder = "Search preconditions...",
-                    items = vaultPreconditions,
+                    items = vaultPreconditions.filter { it.isEnabled },
                     itemText = { prec -> "${prec.name} (${prec.type})" },
                     onItemSelected = { prec ->
                         if (prec != null) {

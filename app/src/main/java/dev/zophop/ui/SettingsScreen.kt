@@ -4,8 +4,12 @@ import android.app.Activity
 import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricManager
@@ -29,6 +33,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
@@ -42,7 +47,9 @@ import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -72,6 +79,20 @@ fun SettingsScreen(
     val context = LocalContext.current
 
     var pendingToggleState by remember { mutableStateOf<Boolean?>(null) }
+    var showNotificationPermissionRationaleDialog by remember { mutableStateOf(false) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.checkPermissionsAndStatus()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     val securityIntentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -248,7 +269,19 @@ fun SettingsScreen(
                             }
                             Switch(
                                 checked = uiState.showWorkflowNotifications,
-                                onCheckedChange = { viewModel.toggleShowWorkflowNotifications(it) }
+                                onCheckedChange = { enable ->
+                                    val notifGranted = if (Build.VERSION.SDK_INT >= 33) hasNotificationPermission else true
+
+                                    if (enable) {
+                                        if (!notifGranted) {
+                                            showNotificationPermissionRationaleDialog = true
+                                        } else {
+                                            viewModel.toggleShowWorkflowNotifications(true)
+                                        }
+                                    } else {
+                                        viewModel.toggleShowWorkflowNotifications(false)
+                                    }
+                                }
                             )
                         }
                     }
@@ -442,7 +475,11 @@ fun SettingsScreen(
                                 title = "Show Notifications",
                                 subtitle = "Lets you see alerts from this app",
                                 isGranted = hasNotificationPermission,
-                                onGrantClick = onRequestNotificationPermission
+                                onGrantClick = {
+                                    if (!hasNotificationPermission) {
+                                        showNotificationPermissionRationaleDialog = true
+                                    }
+                                }
                             )
                         }
 
@@ -573,6 +610,40 @@ fun SettingsScreen(
 
             item { Spacer(modifier = Modifier.height(32.dp)) }
         }
+    }
+
+    if (showNotificationPermissionRationaleDialog) {
+        AlertDialog(
+            onDismissRequest = { showNotificationPermissionRationaleDialog = false },
+            title = { Text("Notification Permission Required") },
+            text = {
+                Text("To display live execution alerts when background workflows run, please enable notifications and notification listener access in the app's settings.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showNotificationPermissionRationaleDialog = false
+                        try {
+                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                            }
+                            context.startActivity(intent)
+                        } catch (_: Exception) {
+                            try {
+                                context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                            } catch (_: Exception) {}
+                        }
+                    }
+                ) {
+                    Text("Open Settings")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNotificationPermissionRationaleDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 }
 

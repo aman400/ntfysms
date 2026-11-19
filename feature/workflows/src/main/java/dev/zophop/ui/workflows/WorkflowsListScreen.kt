@@ -73,6 +73,9 @@ import dev.zophop.data.WorkflowExecutionLogEntity
 import dev.zophop.domain.engine.NodeExecutionStep
 import dev.zophop.domain.engine.NodeStepState
 import dev.zophop.domain.engine.WorkflowExecutionResult
+import dev.zophop.domain.engine.toNodeExecutionSteps
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import dev.zophop.domain.model.NodeType
 import dev.zophop.domain.model.Workflow
 import dev.zophop.domain.model.WorkflowConnection
@@ -650,7 +653,7 @@ fun WorkflowLogsBottomSheet(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    logs.forEach { log ->
+                    logs.forEachIndexed { index, log ->
                         OutlinedCard(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp)
@@ -659,23 +662,54 @@ fun WorkflowLogsBottomSheet(
                                 modifier = Modifier.padding(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
+                                val isSuccess = log.status == "SUCCESS"
+                                val steps = try { 
+                                    log.logs.toNodeExecutionSteps() ?: listOf(
+                                        NodeExecutionStep(
+                                            nodeId = "legacy",
+                                            nodeName = "Execution History",
+                                            nodeType = NodeType.MANUAL_TRIGGER,
+                                            state = if (isSuccess) NodeStepState.SUCCESS else NodeStepState.FAILED,
+                                            logMessage = log.logs
+                                        )
+                                    )
+                                } catch (_: Exception) { 
+                                    listOf(
+                                        NodeExecutionStep(
+                                            nodeId = "legacy",
+                                            nodeName = "Execution History",
+                                            nodeType = NodeType.MANUAL_TRIGGER,
+                                            state = if (isSuccess) NodeStepState.SUCCESS else NodeStepState.FAILED,
+                                            logMessage = log.logs
+                                        )
+                                    )
+                                }
+                                var expanded by remember { mutableStateOf(index == 0) }
+
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    val isSuccess = log.status == "SUCCESS"
-                                    Surface(
-                                        color = if (isSuccess) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
-                                        shape = RoundedCornerShape(4.dp)
-                                    ) {
-                                        Text(
-                                            text = if (isSuccess) "SUCCESS" else log.status,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = if (isSuccess) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                            contentDescription = "Expand",
+                                            modifier = Modifier.size(20.dp).padding(end = 4.dp),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
+                                        Surface(
+                                            color = if (isSuccess) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text(
+                                                text = if (isSuccess) "SUCCESS" else log.status,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isSuccess) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        }
                                     }
 
                                     Text(
@@ -685,33 +719,25 @@ fun WorkflowLogsBottomSheet(
                                     )
                                 }
 
-                                Text(
-                                    text = log.logs,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 11.sp
-                                )
-
-                                if (log.status == "FAILED" && onRetryWorkflowFromFailedNode != null) {
-                                    Button(
-                                        onClick = {
-                                            retryingNodeId = null
-                                            showRetryStepperSheet = true
-                                            retrySteps = emptyList()
-                                            retryResult = null
-                                            onRetryWorkflowFromFailedNode(
-                                                workflow,
-                                                null,
-                                                { steps -> retrySteps = steps },
-                                                { res -> retryResult = res }
-                                            )
-                                        },
-                                        modifier = Modifier.align(Alignment.End).height(28.dp),
-                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
-                                    ) {
-                                        Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(12.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Retry Execution", fontSize = 11.sp)
+                                if (expanded) {
+                                    Box(modifier = Modifier.padding(top = 8.dp)) {
+                                        NodeExecutionStepper(
+                                            steps = steps,
+                                            onRetryFromNode = if (onRetryWorkflowFromFailedNode != null) {
+                                                { failedNodeId ->
+                                                    retryingNodeId = failedNodeId
+                                                    showRetryStepperSheet = true
+                                                    retrySteps = emptyList()
+                                                    retryResult = null
+                                                    onRetryWorkflowFromFailedNode(
+                                                        workflow,
+                                                        failedNodeId,
+                                                        { steps -> retrySteps = steps },
+                                                        { res -> retryResult = res }
+                                                    )
+                                                }
+                                            } else null
+                                        )
                                     }
                                 }
                             }

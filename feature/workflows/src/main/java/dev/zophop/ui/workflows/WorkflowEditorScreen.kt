@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import dev.zophop.core.ui.components.dashedBorder
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,12 +37,15 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
@@ -51,8 +53,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.OutlinedTextField
-import dev.zophop.core.ui.components.InfoTooltipField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
@@ -77,9 +77,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.zophop.core.ui.EditorDarkColorScheme
 import dev.zophop.core.ui.EditorLightColorScheme
+import dev.zophop.core.ui.components.InfoTooltipField
 import dev.zophop.core.ui.components.NoSwipeBottomSheet
+import dev.zophop.core.ui.components.dashedBorder
 import dev.zophop.data.PreconditionEntity
 import dev.zophop.domain.engine.NodeExecutionStep
+import dev.zophop.domain.engine.NodeStepState
 import dev.zophop.domain.engine.WorkflowExecutionResult
 import dev.zophop.domain.model.Credential
 import dev.zophop.domain.model.NodeType
@@ -696,29 +699,50 @@ fun WorkflowNodeCardItem(
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (!isFirst) {
-                            IconButton(
-                                onClick = onMoveUp,
-                                enabled = index > 1,
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowUp,
-                                    contentDescription = "Move Up",
-                                    modifier = Modifier.size(18.dp),
-                                    tint = if (index > 1) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                                )
-                            }
-                            IconButton(
-                                onClick = onMoveDown,
-                                enabled = index < totalNodes - 1,
-                                modifier = Modifier.size(28.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowDown,
-                                    contentDescription = "Move Down",
-                                    modifier = Modifier.size(18.dp),
-                                    tint = if (index < totalNodes - 1) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                                )
+                            var showMenu by remember { mutableStateOf(false) }
+                            Box {
+                                IconButton(
+                                    onClick = { showMenu = true },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MoreVert,
+                                        contentDescription = "Options",
+                                        modifier = Modifier.size(18.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = showMenu,
+                                    onDismissRequest = { showMenu = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Move Up") },
+                                        onClick = {
+                                            showMenu = false
+                                            onMoveUp()
+                                        },
+                                        enabled = index > 1,
+                                        leadingIcon = { Icon(Icons.Default.KeyboardArrowUp, contentDescription = null) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Move Down") },
+                                        onClick = {
+                                            showMenu = false
+                                            onMoveDown()
+                                        },
+                                        enabled = index < totalNodes - 1,
+                                        leadingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null) }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Delete Step") },
+                                        onClick = {
+                                            showMenu = false
+                                            onDeleteNode()
+                                        },
+                                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) }
+                                    )
+                                }
                             }
                         }
                         Switch(
@@ -771,16 +795,17 @@ fun WorkflowNodeCardItem(
                         verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
                         node.preconditions.forEach { prec ->
-                            val badgeText = when (prec) {
+                            val badgeText = (when (prec) {
                                 is Precondition.InternetCheck -> "🌐 Internet"
                                 is Precondition.VpnCheck -> "🔐 VPN"
                                 is Precondition.HealthCheck -> "🩺 Healthcheck"
                                 is Precondition.SimCheck -> "📱 SIM"
                                 is Precondition.GpsCheck -> "📍 GPS"
                                 is Precondition.ChainCheck -> "⛓️ Chained"
-                            }
+                            }) + if (!prec.isEnabled) " (Disabled)" else ""
+
                             Surface(
-                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                color = if (prec.isEnabled) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                                 shape = RoundedCornerShape(4.dp)
                             ) {
                                 Text(
@@ -788,7 +813,7 @@ fun WorkflowNodeCardItem(
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontSize = 9.sp,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    color = if (prec.isEnabled) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                 )
                             }
                         }
@@ -951,7 +976,10 @@ fun TestRunLogBottomSheet(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (isTesting) {
+                    val hasExecutingStep = steps.any { it.state == NodeStepState.EXECUTING }
+                    val effectiveIsTesting = isTesting && (hasExecutingStep || steps.isEmpty())
+
+                    if (effectiveIsTesting) {
                         CircularProgressIndicator(modifier = Modifier.padding(end = 8.dp).size(20.dp), strokeWidth = 2.dp)
                         if (onCancelExecution != null) {
                             OutlinedButton(

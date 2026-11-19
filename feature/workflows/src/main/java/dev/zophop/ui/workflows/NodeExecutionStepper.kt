@@ -30,9 +30,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -59,6 +62,7 @@ import dev.zophop.domain.engine.NodeStepState
 @Composable
 fun NodeExecutionStepper(
     steps: List<NodeExecutionStep>,
+    onRetryFromNode: ((nodeId: String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var selectedErrorLog by remember { mutableStateOf<String?>(null) }
@@ -321,6 +325,20 @@ fun NodeExecutionStepper(
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                 }
+                            }
+                        }
+
+                        if (step.state == NodeStepState.FAILED && onRetryFromNode != null) {
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Button(
+                                onClick = { onRetryFromNode(step.nodeId) },
+                                modifier = Modifier.align(Alignment.End).height(28.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                            ) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(12.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Retry From This Step", fontSize = 11.sp)
                             }
                         }
                     }

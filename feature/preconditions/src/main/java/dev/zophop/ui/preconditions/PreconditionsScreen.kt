@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -21,15 +20,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
-import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -75,6 +70,7 @@ fun PreconditionsScreen(
 ) {
     var editingPrecondition by remember { mutableStateOf<PreconditionEntity?>(null) }
     var pendingDeletePrecondition by remember { mutableStateOf<PreconditionEntity?>(null) }
+    var pendingTogglePrecondition by remember { mutableStateOf<Pair<PreconditionEntity, Boolean>?>(null) }
     var showAddSheet by remember { mutableStateOf(false) }
     var selectedCategoryFilter by remember { mutableStateOf(PreconditionCategoryFilter.ALL) }
 
@@ -209,7 +205,11 @@ fun PreconditionsScreen(
                         linkedWorkflowCount = linkedWorkflows.size,
                         onTestPreconditionWithProgress = onTestPreconditionWithProgress,
                         onToggle = { enabled ->
-                            onSavePrecondition?.invoke(prec.copy(isEnabled = enabled))
+                            if (!enabled && linkedWorkflows.isNotEmpty()) {
+                                pendingTogglePrecondition = Pair(prec, false)
+                            } else {
+                                onSavePrecondition?.invoke(prec.copy(isEnabled = enabled))
+                            }
                         },
                         onEdit = {
                             if (onEditPrecondition != null) onEditPrecondition(prec) else editingPrecondition = prec
@@ -240,6 +240,7 @@ fun PreconditionsScreen(
         PreconditionEditorScreen(
             precondition = null,
             credentials = credentials,
+            workflows = workflows,
             onTestPreconditionWithProgress = onTestPreconditionWithProgress,
             onDismiss = { showAddSheet = false },
             onSave = { newPrec ->
@@ -254,11 +255,59 @@ fun PreconditionsScreen(
         PreconditionEditorScreen(
             precondition = prec,
             credentials = credentials,
+            workflows = workflows,
             onTestPreconditionWithProgress = onTestPreconditionWithProgress,
             onDismiss = { editingPrecondition = null },
             onSave = { updated ->
                 onSavePrecondition?.invoke(updated)
                 editingPrecondition = null
+            }
+        )
+        return
+    }
+
+    pendingTogglePrecondition?.let { (prec, newEnabled) ->
+        val linkedWorkflows = remember(workflows, prec) {
+            workflows.filter { wf ->
+                wf.nodes.any { node -> node.preconditions.any { p -> p.id == prec.id } }
+            }
+        }
+
+        AlertDialog(
+            onDismissRequest = { pendingTogglePrecondition = null },
+            title = { Text("Disable Precondition In Use?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Precondition '${prec.name}' is currently used in ${linkedWorkflows.size} workflow(s):")
+                    linkedWorkflows.forEach { wf ->
+                        Text("• ${wf.name}", fontWeight = FontWeight.Bold)
+                    }
+                    Text(
+                        "Disabling this precondition will cause any attached nodes in these workflows to automatically bypass/skip this guard check during execution.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onSavePrecondition?.invoke(prec.copy(isEnabled = newEnabled))
+                        pendingTogglePrecondition = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Disable")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingTogglePrecondition = null
+                    }
+                ) {
+                    Text("Cancel")
+                }
             }
         )
         return

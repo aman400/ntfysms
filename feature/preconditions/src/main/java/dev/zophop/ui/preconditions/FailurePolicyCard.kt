@@ -5,8 +5,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
@@ -15,9 +21,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
+import android.os.Build
 
 /**
  * Reusable Card composable for configuring Failure and Retry policies on Preconditions.
@@ -32,27 +42,36 @@ fun FailurePolicyCard(
     onRetryIntervalSecondsChanged: (String) -> Unit,
     showNotificationOnFailure: Boolean,
     onShowNotificationOnFailureChanged: (Boolean) -> Unit,
+    onShowNotificationRationale: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+
     OutlinedCard(
         modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
     ) {
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = "Failure & Retry Policy",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = "Choose what happens when this precondition evaluation fails.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "Policy Configuration",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
 
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -61,31 +80,39 @@ fun FailurePolicyCard(
                 FilterChip(
                     selected = onFailureAction == "FAIL_IMMEDIATELY",
                     onClick = { onFailureActionChanged("FAIL_IMMEDIATELY") },
-                    label = { Text("Fail Immediately", fontSize = 12.sp) }
+                    label = { Text("Fail Immediately", fontSize = 12.sp) },
+                    leadingIcon = if (onFailureAction == "FAIL_IMMEDIATELY") {
+                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                    } else null
                 )
                 FilterChip(
                     selected = onFailureAction == "RETRY",
                     onClick = { onFailureActionChanged("RETRY") },
-                    label = { Text("Wait & Retry", fontSize = 12.sp) }
+                    label = { Text("Wait & Retry", fontSize = 12.sp) },
+                    leadingIcon = if (onFailureAction == "RETRY") {
+                        { Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(FilterChipDefaults.IconSize)) }
+                    } else null
                 )
             }
 
             if (onFailureAction == "RETRY") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     OutlinedTextField(
                         value = maxRetries,
                         onValueChange = onMaxRetriesChanged,
-                        label = { Text("Max Retries (Default 3)") },
+                        label = { Text("Max Retries") },
+                        placeholder = { Text("3") },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
                     OutlinedTextField(
                         value = retryIntervalSeconds,
                         onValueChange = onRetryIntervalSecondsChanged,
-                        label = { Text("Interval Sec (Default 30)") },
+                        label = { Text("Interval (sec)") },
+                        placeholder = { Text("30") },
                         modifier = Modifier.weight(1f),
                         singleLine = true
                     )
@@ -93,25 +120,37 @@ fun FailurePolicyCard(
             }
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                     Text(
-                        text = "Show System Notification on Failure",
+                        text = "System Notification on Failure",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
-                        text = "Posts an alert notification if this precondition check fails",
+                        text = "Notify if precondition check fails permanently",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 Switch(
                     checked = showNotificationOnFailure,
-                    onCheckedChange = onShowNotificationOnFailureChanged
+                    onCheckedChange = { enable ->
+                        if (enable && Build.VERSION.SDK_INT >= 33) {
+                            val granted = ContextCompat.checkSelfPermission(
+                                context,
+                                android.Manifest.permission.POST_NOTIFICATIONS
+                            ) == PackageManager.PERMISSION_GRANTED
+                            if (!granted) {
+                                onShowNotificationRationale()
+                                return@Switch
+                            }
+                        }
+                        onShowNotificationOnFailureChanged(enable)
+                    }
                 )
             }
         }

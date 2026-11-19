@@ -19,6 +19,9 @@ import dev.zophop.domain.model.WorkflowNode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -68,6 +71,18 @@ open class PreconditionEvaluator(
         precondition: Precondition,
         onStepUpdate: ((List<NodeExecutionStep>) -> Unit)? = null
     ): PreconditionResult = withContext(Dispatchers.IO) {
+        if (!precondition.isEnabled) {
+            val skippedStep = NodeExecutionStep(
+                nodeId = precondition.id.ifBlank { "prec_skipped" },
+                nodeName = "Precondition Disabled",
+                nodeType = NodeType.HTTP_ACTION,
+                state = NodeStepState.SKIPPED,
+                logMessage = "Precondition is disabled, skipping check."
+            )
+            onStepUpdate?.invoke(listOf(skippedStep))
+            return@withContext PreconditionResult.Passed(steps = listOf(skippedStep))
+        }
+
         val precKey = precondition.hashCode()
         val activeSet = evaluatingPreconditions.get() ?: mutableSetOf()
         if (activeSet.contains(precKey)) {
@@ -411,7 +426,7 @@ open class PreconditionEvaluator(
             }
 
             val request = requestBuilder.build()
-            okHttpClient.newCall(request).execute().use { response ->
+            okHttpClient.newCall(request).await().use { response ->
                 val code = response.code
                 if (code == check.expectedStatus || (check.expectedStatus == 200 && response.isSuccessful)) {
                     PreconditionResult.Passed()
@@ -477,6 +492,22 @@ open class PreconditionEvaluator(
             PreconditionResult.Failed("GPS/Location is disabled on device")
         } else {
             PreconditionResult.Passed()
+        }
+    }
+}
+
+suspend fun okhttp3.Call.await(): okhttp3.Response = suspendCancellableCoroutine { continuation ->
+    continuation.invokeOnCancellation {
+        try {
+            cancel()
+        } catch (_: Exception) {}
+    }
+    try {
+        val response = execute()
+        continuation.resume(response)
+    } catch (e: Exception) {
+        if (!continuation.isCancelled) {
+            continuation.resumeWithException(e)
         }
     }
 }

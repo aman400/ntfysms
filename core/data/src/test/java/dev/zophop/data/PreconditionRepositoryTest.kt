@@ -17,6 +17,8 @@ class PreconditionRepositoryTest {
 
         override fun getAllPreconditionsFlow() = flowOf(map.values.toList())
 
+        override suspend fun getAllPreconditions(): List<PreconditionEntity> = map.values.toList()
+
         override suspend fun getPreconditionById(id: String): PreconditionEntity? = map[id]
 
         override suspend fun insertOrUpdatePrecondition(precondition: PreconditionEntity) {

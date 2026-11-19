@@ -9,6 +9,9 @@ import dev.zophop.domain.model.CredentialType
 import dev.zophop.domain.model.WorkflowNode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -124,7 +127,7 @@ class HttpActionExecutor(
                 }
             }
 
-            val response = okHttpClient.newCall(requestBuilder.build()).execute()
+            val response = okHttpClient.newCall(requestBuilder.build()).await()
             response.use { resp ->
                 val responseBody = resp.body?.string() ?: ""
                 context.set("http_status", resp.code)
@@ -195,6 +198,22 @@ class HttpActionExecutor(
                     builder.addHeader("X-Gotify-Key", appToken)
                 }
             }
+        }
+    }
+}
+
+suspend fun okhttp3.Call.await(): okhttp3.Response = suspendCancellableCoroutine { continuation ->
+    continuation.invokeOnCancellation {
+        try {
+            cancel()
+        } catch (_: Exception) {}
+    }
+    try {
+        val response = execute()
+        continuation.resume(response)
+    } catch (e: Exception) {
+        if (!continuation.isCancelled) {
+            continuation.resumeWithException(e)
         }
     }
 }
