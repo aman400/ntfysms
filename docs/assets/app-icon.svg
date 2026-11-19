@@ -1,51 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <!-- Background Gradient -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1E1B4B" />
-      <stop offset="60%" stop-color="#312E81" />
-      <stop offset="100%" stop-color="#4338CA" />
+    <clipPath id="clip"><rect width="512" height="512" rx="116"/></clipPath>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="1" stop-color="#090D16"/>
     </linearGradient>
-
-    <!-- Radial Glow -->
-    <radialGradient id="glowGrad" cx="50%" cy="48%" r="26%">
-      <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.25" />
-      <stop offset="100%" stop-color="#38BDF8" stop-opacity="0" />
+    <radialGradient id="glowE" gradientUnits="userSpaceOnUse" cx="110" cy="80" r="380">
+      <stop offset="0" stop-color="#10B981" stop-opacity="0.55"/>
+      <stop offset="0.6" stop-color="#064E3B" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#064E3B" stop-opacity="0"/>
     </radialGradient>
-
-    <!-- Rocket Gradient -->
-    <linearGradient id="rocketGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38BDF8" />
-      <stop offset="100%" stop-color="#06B6D4" />
+    <radialGradient id="glowA" gradientUnits="userSpaceOnUse" cx="450" cy="470" r="260">
+      <stop offset="0" stop-color="#F59E0B" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#F59E0B" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bolt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6EE7B7"/>
+      <stop offset="1" stop-color="#10B981"/>
     </linearGradient>
   </defs>
 
-  <!-- Background Base -->
-  <rect width="108" height="108" rx="24" fill="url(#bgGrad)" />
+  <g clip-path="url(#clip)">
+    <rect width="512" height="512" fill="url(#bg)"/>
+    <rect width="512" height="512" fill="url(#glowE)"/>
+    <rect width="512" height="512" fill="url(#glowA)"/>
+  </g>
+  <rect x="1.5" y="1.5" width="509" height="509" rx="114.5" fill="none" stroke="#34D399" stroke-opacity="0.22" stroke-width="3"/>
 
-  <!-- Geometric Concentric Circles -->
-  <circle cx="54" cy="54" r="42" fill="none" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="1" />
-  <circle cx="54" cy="54" r="32" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="1" />
+  <!-- shadow -->
+  <g transform="translate(0 12)" opacity="0.45" fill="none" stroke="#000000" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M318 124 L214 268 L306 268 L196 400" stroke-width="46"/>
+    <circle cx="318" cy="124" r="40" fill="#000000" stroke="none"/>
+    <circle cx="196" cy="400" r="40" fill="#000000" stroke="none"/>
+  </g>
 
-  <!-- Radial Glow -->
-  <circle cx="54" cy="52" r="26" fill="url(#glowGrad)" />
+  <!-- bolt-shaped workflow path -->
+  <path d="M318 124 L214 268 L306 268 L196 400" fill="none" stroke="url(#bolt)" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <!-- SMS Speech Bubble -->
-  <path fill="#FFFFFF" d="M32,38 C32,33.58 35.58,30 40,30 L66,30 C70.42,30 74,33.58 74,38 L74,56 C74,60.42 70.42,64 66,64 L44,64 L35,72 L36.5,64 L40,64 C35.58,64 32,60.42 32,56 Z" />
+  <!-- start node (emerald/mint) -->
+  <circle cx="318" cy="124" r="42" fill="#D1FAE5"/>
+  <circle cx="318" cy="124" r="17" fill="#059669"/>
 
-  <!-- Message Content Lines -->
-  <rect x="40" y="40" width="14" height="3" rx="1.5" fill="#4F46E5" />
-  <rect x="40" y="47" width="22" height="3" rx="1.5" fill="#818CF8" />
-
-  <!-- 4 OTP Pin Code Dots -->
-  <circle cx="40" cy="55" r="1.5" fill="#4F46E5" />
-  <circle cx="46" cy="55" r="1.5" fill="#4F46E5" />
-  <circle cx="52" cy="55" r="1.5" fill="#4F46E5" />
-  <circle cx="58" cy="55" r="1.5" fill="#4F46E5" />
-
-  <!-- Forwarding Rocket Badge -->
-  <path fill="url(#rocketGrad)" d="M60,26 L78,34 L68,50 L64,42 L56,38 Z" />
-
-  <!-- Inner Arrow Highlight -->
-  <path fill="#FFFFFF" d="M65,33 L73,36.5 L69,43.5 L67,39.5 L63,38 Z" />
+  <!-- end node (amber accent) -->
+  <circle cx="196" cy="400" r="42" fill="#FBBF24"/>
+  <circle cx="196" cy="400" r="17" fill="#451A03"/>
 </svg>

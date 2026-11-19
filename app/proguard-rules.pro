@@ -1,18 +1,18 @@
-# NtfySMS ProGuard / R8 Keep Rules
+# ZopHop ProGuard / R8 Keep Rules
 
 # Keep Data Models and Database Entities
--keep class in.ntfysms.data.** { *; }
+-keep class dev.zophop.data.** { *; }
 
 # Keep Room Database
 -keep class * extends androidx.room.RoomDatabase
 -dontwarn androidx.room.paging.**
 
 # Keep WorkManager Workers
--keep class in.ntfysms.worker.** { *; }
+-keep class dev.zophop.worker.** { *; }
 
 # Keep Services, TileService and Broadcast Receivers
--keep class in.ntfysms.service.** { *; }
--keep class in.ntfysms.receiver.** { *; }
+-keep class dev.zophop.service.** { *; }
+-keep class dev.zophop.receiver.** { *; }
 
 # OkHttp & Okio Network Client
 -dontwarn okhttp3.**

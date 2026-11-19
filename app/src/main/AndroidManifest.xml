@@ -9,6 +9,10 @@
 
     <!-- Standard & Android 14+ (API 34) Foreground Service Permissions -->
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -17,26 +21,38 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
-        android:name=".NtfySmsApplication"
+        android:name=".ZopHopApplication"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
-        android:label="@string/app_name"
+        android:label="${appName}"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.NtfySMS">
+        android:theme="@style/Theme.ZopHop">
 
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.NtfySMS">
+            android:theme="@style/Theme.ZopHop.Starting">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name="androidx.activity.ComponentActivity"
+            android:exported="true"
+            tools:replace="android:exported" />
 
         <receiver
             android:name=".receiver.SmsReceiver"
@@ -55,6 +71,14 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".receiver.WorkflowCancelReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="dev.zophop.ACTION_CANCEL_WORKFLOW" />
+            </intent-filter>
+        </receiver>
+
         <!-- Android 14 (API 34) Foreground Service with dataSync type for SMS/Network queue synchronization -->
         <service
             android:name=".service.SmsForwarderService"
@@ -63,7 +87,7 @@
 
         <service
             android:name=".service.NtfyNotificationListenerService"
-            android:label="NtfySMS Notification Reader"
+            android:label="ZopHop Notification Reader"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">
             <intent-filter>
@@ -71,11 +95,11 @@
             </intent-filter>
         </service>
 
-        <!-- Quick Settings Tile Service -->
+        <!-- Quick Settings Tile Service for Workflows Master Switch -->
         <service
-            android:name=".service.SmsForwarderTileService"
-            android:icon="@drawable/ic_notification"
-            android:label="NtfySMS"
+            android:name=".service.WorkflowsTileService"
+            android:icon="@mipmap/ic_launcher"
+            android:label="SMS Automations"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:exported="true">
             <intent-filter>
