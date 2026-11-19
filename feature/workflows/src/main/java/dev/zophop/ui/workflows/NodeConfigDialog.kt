@@ -5,6 +5,7 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,9 +25,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
+import androidx.compose.foundation.Image
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -512,14 +519,142 @@ fun NodeConfigBottomSheet(
                     )
                 }
                 NodeType.NOTIFICATION_TRIGGER -> {
-                    InfoTooltipField(
-                        value = packageFilter,
-                        onValueChange = { packageFilter = it },
-                        label = "App Package Filter (e.g. com.bank.app)",
-                        tooltipText = "Package name filter for incoming notification events.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                    val context = LocalContext.current
+                    val installedApps = remember {
+                        try {
+                            val pm = context.packageManager
+                            val intent = Intent(Intent.ACTION_MAIN, null).apply {
+                                addCategory(Intent.CATEGORY_LAUNCHER)
+                            }
+                            pm.queryIntentActivities(intent, 0).map { resolveInfo ->
+                                val packageName = resolveInfo.activityInfo.packageName
+                                val appName = resolveInfo.loadLabel(pm).toString()
+                                val icon = resolveInfo.loadIcon(pm)
+                                Triple(packageName, appName, icon)
+                            }.distinctBy { it.first }.sortedBy { it.second }
+                        } catch (_: Exception) {
+                            emptyList()
+                        }
+                    }
+
+                    var selectedPackages by remember {
+                        mutableStateOf(
+                            packageFilter.split(",", "\n").map { it.trim() }.filter { it.isNotEmpty() && it != ".*" }.toSet()
+                        )
+                    }
+                    var showAppPickerModal by remember { mutableStateOf(false) }
+
+                    androidx.compose.runtime.LaunchedEffect(selectedPackages) {
+                        packageFilter = if (selectedPackages.isEmpty()) ".*" else selectedPackages.joinToString(", ")
+                    }
+
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = "Target Apps Selection",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = if (selectedPackages.isEmpty()) "Intercepting notifications from All Apps (.*)" else "Intercepting from ${selectedPackages.size} selected app(s)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Button(
+                            onClick = { showAppPickerModal = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Select Installed Apps (${selectedPackages.size})")
+                        }
+
+                        if (selectedPackages.isNotEmpty()) {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                selectedPackages.forEach { pkg ->
+                                    val appInfo = installedApps.find { it.first == pkg }
+                                    val displayName = appInfo?.second ?: pkg
+                                    SuggestionChip(
+                                        onClick = {
+                                            selectedPackages = selectedPackages - pkg
+                                        },
+                                        label = { Text("$displayName ✕") }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (showAppPickerModal) {
+                        AlertDialog(
+                            onDismissRequest = { showAppPickerModal = false },
+                            title = { Text("Select Target Apps") },
+                            text = {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(360.dp)
+                                        .verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    installedApps.forEach { (pkg, appName, icon) ->
+                                        val isSelected = selectedPackages.contains(pkg)
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    selectedPackages = if (isSelected) {
+                                                        selectedPackages - pkg
+                                                    } else {
+                                                        selectedPackages + pkg
+                                                    }
+                                                }
+                                                .padding(vertical = 8.dp, horizontal = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Checkbox(
+                                                checked = isSelected,
+                                                onCheckedChange = { checked ->
+                                                    selectedPackages = if (checked) {
+                                                        selectedPackages + pkg
+                                                    } else {
+                                                        selectedPackages - pkg
+                                                    }
+                                                }
+                                            )
+                                            val bitmap = remember(icon) {
+                                                try {
+                                                    icon?.toBitmap(width = 48, height = 48)?.asImageBitmap()
+                                                } catch (_: Exception) { null }
+                                            }
+                                            if (bitmap != null) {
+                                                Image(bitmap = bitmap, contentDescription = null, modifier = Modifier.size(24.dp))
+                                            } else {
+                                                Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                                                    Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                }
+                                            }
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(text = appName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                                Text(text = pkg, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                Button(onClick = { showAppPickerModal = false }) {
+                                    Text("Done")
+                                }
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
                     InfoTooltipField(
                         value = textRegex,
                         onValueChange = { textRegex = it },

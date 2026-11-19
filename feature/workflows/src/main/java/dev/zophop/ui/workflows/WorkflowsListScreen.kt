@@ -81,7 +81,9 @@ import dev.zophop.domain.model.Workflow
 import dev.zophop.domain.model.WorkflowConnection
 import dev.zophop.domain.model.WorkflowNode
 import kotlinx.coroutines.flow.Flow
+import java.util.Locale
 import java.util.UUID
+import androidx.compose.ui.platform.LocalLocale
 
 /**
  * Modernized Workflows List Screen.
@@ -713,7 +715,7 @@ fun WorkflowLogsBottomSheet(
                                     }
 
                                     Text(
-                                        text = java.text.SimpleDateFormat("MMM dd, HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date(log.timestamp)),
+                                        text = java.text.SimpleDateFormat("MMM dd, HH:mm:ss", LocalLocale.current.platformLocale).format(java.util.Date(log.timestamp)),
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
