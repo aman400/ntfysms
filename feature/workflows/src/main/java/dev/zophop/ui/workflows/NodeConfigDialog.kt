@@ -33,7 +33,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.AlertDialog
+import dev.zophop.core.ui.components.NoSwipeBottomSheet
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -89,7 +89,7 @@ private data class Quadruple<A, B, C, D>(
     val fourth: D
 )
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NodeConfigBottomSheet(
     node: WorkflowNode,
@@ -520,21 +520,11 @@ fun NodeConfigBottomSheet(
                 }
                 NodeType.NOTIFICATION_TRIGGER -> {
                     val context = LocalContext.current
-                    val installedApps = remember {
-                        try {
-                            val pm = context.packageManager
-                            val intent = Intent(Intent.ACTION_MAIN, null).apply {
-                                addCategory(Intent.CATEGORY_LAUNCHER)
-                            }
-                            pm.queryIntentActivities(intent, 0).map { resolveInfo ->
-                                val packageName = resolveInfo.activityInfo.packageName
-                                val appName = resolveInfo.loadLabel(pm).toString()
-                                val icon = resolveInfo.loadIcon(pm)
-                                Triple(packageName, appName, icon)
-                            }.distinctBy { it.first }.sortedBy { it.second }
-                        } catch (_: Exception) {
-                            emptyList()
-                        }
+                    val installedApps = remember(context) {
+                        val selfPkg = context.packageName
+                        AppListHelper.getInstalledApps(context)
+                            .filter { it.packageName != ".*" && it.packageName != selfPkg }
+                            .map { Triple(it.packageName, it.appName, it.icon) }
                     }
 
                     var selectedPackages by remember {
@@ -542,7 +532,7 @@ fun NodeConfigBottomSheet(
                             packageFilter.split(",", "\n").map { it.trim() }.filter { it.isNotEmpty() && it != ".*" }.toSet()
                         )
                     }
-                    var showAppPickerModal by remember { mutableStateOf(false) }
+                    var showAppPickerSheet by remember { mutableStateOf(false) }
 
                     androidx.compose.runtime.LaunchedEffect(selectedPackages) {
                         packageFilter = if (selectedPackages.isEmpty()) ".*" else selectedPackages.joinToString(", ")
@@ -561,12 +551,12 @@ fun NodeConfigBottomSheet(
                         )
 
                         Button(
-                            onClick = { showAppPickerModal = true },
+                            onClick = { showAppPickerSheet = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Select Installed Apps (${selectedPackages.size})")
+                            Text("Select Target Apps (${selectedPackages.size})")
                         }
 
                         if (selectedPackages.isNotEmpty()) {
@@ -588,19 +578,56 @@ fun NodeConfigBottomSheet(
                         }
                     }
 
-                    if (showAppPickerModal) {
-                        AlertDialog(
-                            onDismissRequest = { showAppPickerModal = false },
-                            title = { Text("Select Target Apps") },
-                            text = {
+                    if (showAppPickerSheet) {
+                        NoSwipeBottomSheet(onDismissRequest = { showAppPickerSheet = false }) {
+                            var searchQuery by remember { mutableStateOf("") }
+                            val filteredApps = remember(installedApps, searchQuery) {
+                                if (searchQuery.isBlank()) installedApps
+                                else installedApps.filter {
+                                    it.second.contains(searchQuery, ignoreCase = true) || it.first.contains(searchQuery, ignoreCase = true)
+                                }
+                            }
+
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp)
+                                    .padding(bottom = 24.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Select Target Apps",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    IconButton(onClick = { showAppPickerSheet = false }) {
+                                        Icon(Icons.Default.Close, contentDescription = "Close")
+                                    }
+                                }
+
+                                OutlinedTextField(
+                                    value = searchQuery,
+                                    onValueChange = { searchQuery = it },
+                                    label = { Text("Search apps by name or package...") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    singleLine = true
+                                )
+
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(360.dp)
+                                        .height(380.dp)
                                         .verticalScroll(rememberScrollState()),
                                     verticalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    installedApps.forEach { (pkg, appName, icon) ->
+                                    filteredApps.forEach { (pkg, appName, icon) ->
                                         val isSelected = selectedPackages.contains(pkg)
                                         Row(
                                             modifier = Modifier
@@ -645,13 +672,15 @@ fun NodeConfigBottomSheet(
                                         }
                                     }
                                 }
-                            },
-                            confirmButton = {
-                                Button(onClick = { showAppPickerModal = false }) {
+
+                                Button(
+                                    onClick = { showAppPickerSheet = false },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
                                     Text("Done")
                                 }
                             }
-                        )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
