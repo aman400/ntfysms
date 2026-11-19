@@ -319,12 +319,12 @@ fun PreconditionEditorScreen(
     }
 
     val typeOptions = listOf(
-        PreconditionType.INTERNET_CHECK.name to "🌐 Network / Internet Check",
-        PreconditionType.VPN_CHECK.name to "🔐 VPN Check (Tailscale/WireGuard)",
-        PreconditionType.GPS_CHECK.name to "📍 GPS / Location Enabled Check",
-        PreconditionType.SIM_CHECK.name to "📱 SIM Card Active Check",
-        PreconditionType.HEALTH_CHECK.name to "🩺 HTTP Healthcheck (Reusing HTTP Node)",
-        PreconditionType.CHAINED_CHECK.name to "⛓️ Chained Pipeline (HTTP → Parse → Condition)"
+        PreconditionType.INTERNET_CHECK.name to "Network / Internet Check",
+        PreconditionType.VPN_CHECK.name to "VPN Check (Tailscale/WireGuard)",
+        PreconditionType.GPS_CHECK.name to "GPS / Location Enabled Check",
+        PreconditionType.SIM_CHECK.name to "SIM Card Active Check",
+        PreconditionType.HEALTH_CHECK.name to "HTTP Healthcheck (Reusing HTTP Node)",
+        PreconditionType.CHAINED_CHECK.name to "Chained Pipeline (HTTP → Parse → Condition)"
     )
 
     Scaffold(
@@ -386,37 +386,47 @@ fun PreconditionEditorScreen(
             ) {
                 ExtendedFloatingActionButton(
                     onClick = {
-                        val tempEntity = PreconditionEntity(
-                            id = precondition?.id ?: UUID.randomUUID().toString(),
-                            name = name,
-                            type = selectedType,
-                            isEnabled = isEnabled,
-                            targetUrl = targetUrl,
-                            method = method,
-                            headers = headers,
-                            expectedStatus = expectedStatus.toIntOrNull() ?: 200,
-                            requiredCarrier = requiredCarrier,
-                            credentialId = credentialId,
-                            pipelineJson = if (selectedType == PreconditionType.CHAINED_CHECK.name) pipelineJson else "",
-                            onFailureAction = onFailureAction,
-                            maxRetries = maxRetries.toIntOrNull() ?: 3,
-                            retryIntervalSeconds = retryIntervalSeconds.toIntOrNull() ?: 30,
-                            showNotificationOnFailure = showNotificationOnFailure
-                        )
-                        isTestingSheet = true
-                        showTestStepperSheet = true
-                        sheetTestResult = null
-                        sheetTestSteps = emptyList()
-                        onTestPreconditionWithProgress?.invoke(
-                            tempEntity,
-                            { steps -> sheetTestSteps = steps },
-                            { res ->
-                                isTestingSheet = false
-                                sheetTestResult = res
-                            }
-                        )
+                        if (isTestingSheet) {
+                            showTestStepperSheet = true
+                        } else {
+                            val tempEntity = PreconditionEntity(
+                                id = precondition?.id ?: UUID.randomUUID().toString(),
+                                name = name,
+                                type = selectedType,
+                                isEnabled = isEnabled,
+                                targetUrl = targetUrl,
+                                method = method,
+                                headers = headers,
+                                expectedStatus = expectedStatus.toIntOrNull() ?: 200,
+                                requiredCarrier = requiredCarrier,
+                                credentialId = credentialId,
+                                pipelineJson = if (selectedType == PreconditionType.CHAINED_CHECK.name) pipelineJson else "",
+                                onFailureAction = onFailureAction,
+                                maxRetries = maxRetries.toIntOrNull() ?: 3,
+                                retryIntervalSeconds = retryIntervalSeconds.toIntOrNull() ?: 30,
+                                showNotificationOnFailure = showNotificationOnFailure
+                            )
+                            isTestingSheet = true
+                            showTestStepperSheet = true
+                            sheetTestResult = null
+                            sheetTestSteps = emptyList()
+                            onTestPreconditionWithProgress?.invoke(
+                                tempEntity,
+                                { steps -> sheetTestSteps = steps },
+                                { res ->
+                                    isTestingSheet = false
+                                    sheetTestResult = res
+                                }
+                            )
+                        }
                     },
-                    icon = { Icon(Icons.Default.PlayArrow, contentDescription = "Test") },
+                    icon = {
+                        if (isTestingSheet) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Test")
+                        }
+                    },
                     text = { Text(if (isTestingSheet) "Verifying..." else "Test") },
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
                     contentColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -458,7 +468,7 @@ fun PreconditionEditorScreen(
                     ) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                         Text(
-                            text = "⚡ Precondition Verification in Progress... Editing is disabled during test execution.",
+                            text = "Precondition Verification in Progress... Editing is disabled during test execution.",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -641,7 +651,7 @@ fun PreconditionEditorScreen(
                             onValueChange = {},
                             readOnly = true,
                             enabled = !isTestingSheet,
-                            label = { Text("🔑 Attach Saved Credential") },
+                            label = { Text("Attach Saved Credential") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedCredMenu) },
                             modifier = Modifier
                                 .menuAnchor(MenuAnchorType.PrimaryNotEditable)
@@ -661,7 +671,7 @@ fun PreconditionEditorScreen(
                             )
                             credentials.forEach { cred ->
                                 DropdownMenuItem(
-                                    text = { Text("🔑 ${cred.name} (${cred.type.name})") },
+                                    text = { Text("${cred.name} (${cred.type.name})") },
                                     onClick = {
                                         credentialId = cred.id
                                         expandedCredMenu = false
@@ -1061,7 +1071,7 @@ fun FailurePolicyAccordion(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "🛡️ Failure & Retry Policy",
+                        text = "Failure & Retry Policy",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -1154,7 +1164,7 @@ fun AddChainNodeDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "🔍 Extraction & Parsing",
+                    text = "Extraction & Parsing",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -1164,7 +1174,7 @@ fun AddChainNodeDialog(
                 }
 
                 Text(
-                    text = "🔀 Logic & Filtering",
+                    text = "Logic & Filtering",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -1174,7 +1184,7 @@ fun AddChainNodeDialog(
                 }
 
                 Text(
-                    text = "🚀 Actions & Delivery",
+                    text = "Actions & Delivery",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
