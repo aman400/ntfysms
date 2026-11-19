@@ -8,7 +8,9 @@
 
     <group
         android:pivotX="54"
-        android:pivotY="54">
+        android:pivotY="54"
+        android:scaleX="0.72"
+        android:scaleY="0.72">
 
         <!-- Shadow Path -->
         <path
