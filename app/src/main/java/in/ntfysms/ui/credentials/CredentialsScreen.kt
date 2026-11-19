@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,7 +21,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -51,13 +55,18 @@ import androidx.compose.ui.unit.sp
 import `in`.ntfysms.core.ui.components.CredentialBottomSheet
 import `in`.ntfysms.domain.model.Credential
 import `in`.ntfysms.ui.MainViewModel
+import org.json.JSONObject
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CredentialsScreen(
     viewModel: MainViewModel,
     onBack: (() -> Unit)? = null
 ) {
     val credentials by viewModel.credentials.collectAsState()
+    val workflows by viewModel.workflows.collectAsState()
+    val preconditions by viewModel.preconditions.collectAsState()
+
     var editingCredential by remember { mutableStateOf<Credential?>(null) }
     var pendingDeleteCredential by remember { mutableStateOf<Credential?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
@@ -95,8 +104,23 @@ fun CredentialsScreen(
                 }
             } else {
                 items(credentials, key = { it.id }) { cred ->
+                    val linkedWorkflows = remember(workflows, cred) {
+                        workflows.filter { wf ->
+                            wf.nodes.any { node ->
+                                try {
+                                    JSONObject(node.configJson).optString("credentialId") == cred.id
+                                } catch (_: Exception) { false }
+                            }
+                        }
+                    }
+                    val linkedPreconditions = remember(preconditions, cred) {
+                        preconditions.filter { prec -> prec.credentialId == cred.id }
+                    }
+
                     CredentialCardItem(
                         credential = cred,
+                        linkedWorkflowCount = linkedWorkflows.size,
+                        linkedPreconditionCount = linkedPreconditions.size,
                         onEdit = { editingCredential = cred },
                         onDelete = { pendingDeleteCredential = cred }
                     )
@@ -121,6 +145,8 @@ fun CredentialsScreen(
     if (showAddDialog) {
         CredentialBottomSheet(
             credential = null,
+            linkedWorkflowCount = 0,
+            linkedPreconditionCount = 0,
             onDismiss = { showAddDialog = false },
             onSave = { newCred ->
                 viewModel.saveCredential(newCred)
@@ -130,8 +156,23 @@ fun CredentialsScreen(
     }
 
     editingCredential?.let { cred ->
+        val linkedWorkflows = remember(workflows, cred) {
+            workflows.filter { wf ->
+                wf.nodes.any { node ->
+                    try {
+                        JSONObject(node.configJson).optString("credentialId") == cred.id
+                    } catch (_: Exception) { false }
+                }
+            }
+        }
+        val linkedPreconditions = remember(preconditions, cred) {
+            preconditions.filter { prec -> prec.credentialId == cred.id }
+        }
+
         CredentialBottomSheet(
             credential = cred,
+            linkedWorkflowCount = linkedWorkflows.size,
+            linkedPreconditionCount = linkedPreconditions.size,
             onDismiss = { editingCredential = null },
             onSave = { updated ->
                 viewModel.saveCredential(updated)
@@ -141,34 +182,83 @@ fun CredentialsScreen(
     }
 
     pendingDeleteCredential?.let { cred ->
-        AlertDialog(
-            onDismissRequest = { pendingDeleteCredential = null },
-            title = { Text("Delete Credential?") },
-            text = { Text("Are you sure you want to delete credential '${cred.name}'?") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.deleteCredential(cred.id)
-                        pendingDeleteCredential = null
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Delete")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDeleteCredential = null }) {
-                    Text("Cancel")
+        val linkedWorkflows = remember(workflows, cred) {
+            workflows.filter { wf ->
+                wf.nodes.any { node ->
+                    try {
+                        JSONObject(node.configJson).optString("credentialId") == cred.id
+                    } catch (_: Exception) { false }
                 }
             }
-        )
+        }
+        val linkedPreconditions = remember(preconditions, cred) {
+            preconditions.filter { prec -> prec.credentialId == cred.id }
+        }
+
+        if (linkedWorkflows.isNotEmpty() || linkedPreconditions.isNotEmpty()) {
+            AlertDialog(
+                onDismissRequest = { pendingDeleteCredential = null },
+                title = { Text("Cannot Delete Credential") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Credential '${cred.name}' is currently in use:")
+                        if (linkedWorkflows.isNotEmpty()) {
+                            Text("Workflows (${linkedWorkflows.size}):", fontWeight = FontWeight.Bold)
+                            linkedWorkflows.forEach { wf ->
+                                Text("• ${wf.name}")
+                            }
+                        }
+                        if (linkedPreconditions.isNotEmpty()) {
+                            Text("Preconditions (${linkedPreconditions.size}):", fontWeight = FontWeight.Bold)
+                            linkedPreconditions.forEach { prec ->
+                                Text("• ${prec.name}")
+                            }
+                        }
+                        Text(
+                            "Please remove this credential from the items above before deleting it.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = { pendingDeleteCredential = null }) {
+                        Text("OK")
+                    }
+                }
+            )
+        } else {
+            AlertDialog(
+                onDismissRequest = { pendingDeleteCredential = null },
+                title = { Text("Delete Credential?") },
+                text = { Text("Are you sure you want to delete credential '${cred.name}'?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.deleteCredential(cred.id)
+                            pendingDeleteCredential = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingDeleteCredential = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun CredentialCardItem(
     credential: Credential,
+    linkedWorkflowCount: Int = 0,
+    linkedPreconditionCount: Int = 0,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
@@ -226,64 +316,114 @@ fun CredentialCardItem(
                 containerColor = MaterialTheme.colorScheme.surface
             )
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
-                        modifier = Modifier.size(36.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Lock,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        Column {
+                            Text(
+                                text = credential.name,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = credential.type.displayName(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp
                             )
                         }
                     }
 
-                    Column {
-                        Text(
-                            text = credential.name,
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = credential.type.displayName(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = 11.sp
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onEdit, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
+                // Usage Badges
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Surface(
+                        color = if (linkedWorkflowCount > 0) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.surfaceContainerLow,
+                        contentColor = if (linkedWorkflowCount > 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(11.dp))
+                            Text(
+                                text = if (linkedWorkflowCount > 0) "$linkedWorkflowCount Workflow${if (linkedWorkflowCount > 1) "s" else ""}" else "No Workflows",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(16.dp)
-                        )
+
+                    Surface(
+                        color = if (linkedPreconditionCount > 0) MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.surfaceContainerLow,
+                        contentColor = if (linkedPreconditionCount > 0) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        shape = RoundedCornerShape(4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Icon(Icons.Default.Shield, contentDescription = null, modifier = Modifier.size(11.dp))
+                            Text(
+                                text = if (linkedPreconditionCount > 0) "$linkedPreconditionCount Precondition${if (linkedPreconditionCount > 1) "s" else ""}" else "No Preconditions",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
                 }
             }

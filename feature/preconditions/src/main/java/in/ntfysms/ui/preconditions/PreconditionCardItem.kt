@@ -233,8 +233,8 @@ fun PreconditionCardItem(
 
                                 testResult?.let { res ->
                                     val (badgeText, badgeIcon, bg, fg) = when (res) {
-                                        is PreconditionResult.Passed -> Quadruple("OK", Icons.Default.CheckCircle, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
-                                        is PreconditionResult.Failed -> Quadruple("Fail", Icons.Default.Error, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
+                                        is PreconditionResult.Passed -> Quadruple("Verified", Icons.Default.CheckCircle, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+                                        is PreconditionResult.Failed -> Quadruple("Failed", Icons.Default.Error, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
                                     }
                                     SuggestionChip(
                                         onClick = { showTestStepperSheet = true },
@@ -304,7 +304,7 @@ fun PreconditionCardItem(
                     val isRetry = precondition.onFailureAction.equals("RETRY", ignoreCase = true)
                     if (isRetry) {
                         Surface(
-                            color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f),
+                            color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.8f),
                             contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                             shape = RoundedCornerShape(4.dp)
                         ) {
@@ -315,7 +315,7 @@ fun PreconditionCardItem(
                             ) {
                                 Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(11.dp))
                                 Text(
-                                    text = "${precondition.maxRetries}x • ${precondition.retryIntervalSeconds}s",
+                                    text = "Retry ${precondition.maxRetries}x (${precondition.retryIntervalSeconds}s)",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.SemiBold
@@ -326,7 +326,7 @@ fun PreconditionCardItem(
 
                     if (precondition.showNotificationOnFailure) {
                         Surface(
-                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                             shape = RoundedCornerShape(4.dp)
                         ) {
@@ -336,7 +336,7 @@ fun PreconditionCardItem(
                                 horizontalArrangement = Arrangement.spacedBy(3.dp)
                             ) {
                                 Icon(Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(11.dp))
-                                Text("Alert", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                Text("System Alert", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -353,7 +353,7 @@ fun PreconditionCardItem(
                         ) {
                             Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(11.dp))
                             Text(
-                                text = if (linkedWorkflowCount > 0) "$linkedWorkflowCount Wf" else "Unlinked",
+                                text = if (linkedWorkflowCount > 0) "$linkedWorkflowCount Workflow${if (linkedWorkflowCount > 1) "s" else ""}" else "No Workflows",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold
