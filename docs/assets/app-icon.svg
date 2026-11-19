@@ -2,43 +2,46 @@
   <defs>
     <clipPath id="clip"><rect width="512" height="512" rx="116"/></clipPath>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#5B21B6"/>
-      <stop offset="0.55" stop-color="#C026D3"/>
-      <stop offset="1" stop-color="#FB7185"/>
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="1" stop-color="#090D16"/>
     </linearGradient>
-    <radialGradient id="light" gradientUnits="userSpaceOnUse" cx="120" cy="60" r="360">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    <radialGradient id="glowE" gradientUnits="userSpaceOnUse" cx="110" cy="80" r="380">
+      <stop offset="0" stop-color="#10B981" stop-opacity="0.55"/>
+      <stop offset="0.6" stop-color="#064E3B" stop-opacity="0.25"/>
+      <stop offset="1" stop-color="#064E3B" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="dark" gradientUnits="userSpaceOnUse" cx="460" cy="470" r="300">
-      <stop offset="0" stop-color="#FDBA74" stop-opacity="0.45"/>
-      <stop offset="1" stop-color="#FDBA74" stop-opacity="0"/>
+    <radialGradient id="glowA" gradientUnits="userSpaceOnUse" cx="450" cy="470" r="260">
+      <stop offset="0" stop-color="#F59E0B" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#F59E0B" stop-opacity="0"/>
     </radialGradient>
     <linearGradient id="bolt" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#FEF3C7"/>
+      <stop offset="0" stop-color="#6EE7B7"/>
+      <stop offset="1" stop-color="#10B981"/>
     </linearGradient>
   </defs>
 
   <g clip-path="url(#clip)">
     <rect width="512" height="512" fill="url(#bg)"/>
-    <rect width="512" height="512" fill="url(#dark)"/>
-    <rect width="512" height="512" fill="url(#light)"/>
+    <rect width="512" height="512" fill="url(#glowE)"/>
+    <rect width="512" height="512" fill="url(#glowA)"/>
   </g>
+  <rect x="1.5" y="1.5" width="509" height="509" rx="114.5" fill="none" stroke="#34D399" stroke-opacity="0.22" stroke-width="3"/>
 
   <!-- shadow -->
-  <g transform="translate(0 12)" opacity="0.25" fill="none" stroke="#2E0A4F" stroke-linecap="round" stroke-linejoin="round">
+  <g transform="translate(0 12)" opacity="0.45" fill="none" stroke="#000000" stroke-linecap="round" stroke-linejoin="round">
     <path d="M318 124 L214 268 L306 268 L196 400" stroke-width="46"/>
-    <circle cx="318" cy="124" r="40" fill="#2E0A4F" stroke="none"/>
-    <circle cx="196" cy="400" r="40" fill="#2E0A4F" stroke="none"/>
+    <circle cx="318" cy="124" r="40" fill="#000000" stroke="none"/>
+    <circle cx="196" cy="400" r="40" fill="#000000" stroke="none"/>
   </g>
 
   <!-- bolt-shaped workflow path -->
   <path d="M318 124 L214 268 L306 268 L196 400" fill="none" stroke="url(#bolt)" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <!-- end nodes -->
-  <circle cx="318" cy="124" r="42" fill="#FFFFFF"/>
-  <circle cx="318" cy="124" r="17" fill="#7E22CE"/>
-  <circle cx="196" cy="400" r="42" fill="#FEF3C7"/>
-  <circle cx="196" cy="400" r="17" fill="#F97316"/>
+  <!-- start node (emerald/mint) -->
+  <circle cx="318" cy="124" r="42" fill="#D1FAE5"/>
+  <circle cx="318" cy="124" r="17" fill="#059669"/>
+
+  <!-- end node (amber accent) -->
+  <circle cx="196" cy="400" r="42" fill="#FBBF24"/>
+  <circle cx="196" cy="400" r="17" fill="#451A03"/>
 </svg>
