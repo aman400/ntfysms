@@ -19,9 +19,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -244,7 +244,7 @@ fun CredentialBottomSheet(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(13.dp))
+                                Icon(Icons.Default.AccountTree, contentDescription = null, modifier = Modifier.size(13.dp))
                                 Text(
                                     text = if (linkedWorkflowCount > 0) "$linkedWorkflowCount Linked Workflow${if (linkedWorkflowCount > 1) "s" else ""}" else "0 Linked Workflows",
                                     style = MaterialTheme.typography.labelSmall,
@@ -435,7 +435,7 @@ fun SensitiveTextField(
                             Text(
                                 text = label,
                                 style = MaterialTheme.typography.titleSmall,
-                                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(

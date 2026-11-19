@@ -18,10 +18,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.AlertDialog
@@ -396,7 +396,7 @@ fun CredentialCardItem(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
-                            Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(11.dp))
+                            Icon(Icons.Default.AccountTree, contentDescription = null, modifier = Modifier.size(11.dp))
                             Text(
                                 text = if (linkedWorkflowCount > 0) "$linkedWorkflowCount Workflow${if (linkedWorkflowCount > 1) "s" else ""}" else "No Workflows",
                                 style = MaterialTheme.typography.labelSmall,
