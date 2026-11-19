@@ -6,7 +6,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.work.testing.WorkManagerTestInitHelper
+import androidx.work.Configuration
 import dev.zophop.ui.credentials.CredentialsScreen
 import org.junit.Before
 import org.junit.Rule
@@ -14,8 +14,13 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
+class TestApp : Application(), Configuration.Provider {
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().build()
+}
+
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [33], manifest = Config.NONE)
+@Config(sdk = [33], application = TestApp::class)
 class ComposeUiScreensComprehensiveTest {
 
     @get:Rule
@@ -26,10 +31,6 @@ class ComposeUiScreensComprehensiveTest {
     @Before
     fun setUp() {
         application = ApplicationProvider.getApplicationContext()
-        try {
-            WorkManagerTestInitHelper.initializeTestWorkManager(application)
-        } catch (_: Exception) {
-        }
     }
 
     @Test
