@@ -3,7 +3,7 @@ plugins {
 }
 
 android {
-    namespace = "in.ntfysms.core.model"
+    namespace = "dev.zophop.core.model"
     compileSdk = 37
 
     defaultConfig {

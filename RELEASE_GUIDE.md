@@ -1,4 +1,4 @@
-# NtfySMS Signed Release & GitHub Publishing Guide
+# ZopHop Signed Release & GitHub Publishing Guide
 
 This guide details how to generate signed Release APKs locally and how to set up automated GitHub Release publishing.
 
@@ -30,7 +30,7 @@ KEY_PASSWORD=your_password \
 
 The signed, optimized Release APK will be generated at:
 ```text
-app/build/outputs/apk/release/NtfySMS-v1.0.0.apk
+app/build/outputs/apk/release/ZopHop-v1.0.0.apk
 ```
 
 ---
@@ -59,11 +59,11 @@ Navigate to **Settings** → **Secrets and variables** → **Actions** → Add t
 To publish a new GitHub Release automatically, tag your commit and push to GitHub:
 
 ```bash
-git tag -a v1.0.0 -m "NtfySMS v1.0.0 Release"
+git tag -a v1.0.0 -m "ZopHop v1.0.0 Release"
 git push origin v1.0.0
 ```
 
 GitHub Actions will automatically:
 1. Compile and optimize R8 ProGuard release binaries.
-2. Sign the output APK (`NtfySMS-v1.0.0.apk`).
+2. Sign the output APK (`ZopHop-v1.0.0.apk`).
 3. Create a GitHub Release and attach the APK asset for direct download.

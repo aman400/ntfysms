@@ -22,7 +22,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NtfySMS"
+rootProject.name = "ZopHop"
 include(":app")
 include(":core:model")
 include(":core:data")

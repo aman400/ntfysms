@@ -1,6 +1,6 @@
-# NtfySMS — Complete User & Setup Manual
+# ZopHop — Complete User & Setup Manual
 
-NtfySMS is an Android application that captures incoming OTP SMS messages (and optional app push notifications), extracts verification codes, and forwards them to **ntfy** or **Gotify** servers.
+ZopHop is an Android application that captures incoming OTP SMS messages (and optional app push notifications), extracts verification codes, and forwards them to **ntfy** or **Gotify** servers.
 
 It is built specifically for personal use, home lab owners, and self-hosters who need reliable forwarding to servers hosted locally or behind private networks (such as Tailscale or WireGuard).
 
@@ -35,13 +35,13 @@ When an incoming SMS arrives on your phone:
 
 ## 2. First-Time App Setup & How to Use
 
-Follow these steps to get NtfySMS up and running on your Android device:
+Follow these steps to get ZopHop up and running on your Android device:
 
 ### Step 1: Install & Launch
-Download and install the signed APK (`NtfySMS-v1.0.0.apk`) on your phone (Android 8.0 / API 26 or higher).
+Download and install the signed APK (`ZopHop-v1.0.0.apk`) on your phone (Android 8.0 / API 26 or higher).
 
 > **⚠️ Bypassing / Disabling Google Play Protect**:
-> Because NtfySMS requests sensitive SMS permissions (`RECEIVE_SMS`) and is self-published rather than distributed via the Play Store, Google Play Protect will flag sideloaded installations.
+> Because ZopHop requests sensitive SMS permissions (`RECEIVE_SMS`) and is self-published rather than distributed via the Play Store, Google Play Protect will flag sideloaded installations.
 >
 > **Method 1: Install Anyway (Recommended for One-Time Install)**
 > 1. When the *"Blocked by Play Protect"* pop-up appears, tap **"More details"** (or the small dropdown arrow).
@@ -60,10 +60,10 @@ Download and install the signed APK (`NtfySMS-v1.0.0.apk`) on your phone (Androi
 > *(To re-enable Play Store later: `adb shell pm enable com.android.vending`)*
 
 ### Step 2: Grant Permissions
-Open NtfySMS and navigate to **Settings** (tab on the bottom right):
-1. **SMS Permission (`RECEIVE_SMS`)**: Tap **Grant** so NtfySMS can read incoming SMS messages.
-2. **Notification Permission (`POST_NOTIFICATIONS`)**: Tap **Grant** (required on Android 13+) so NtfySMS can show foreground status notifications.
-3. **Ignore Battery Optimization**: Tap **Ignore** and exempt NtfySMS from battery optimization so background forwarding isn't delayed.
+Open ZopHop and navigate to **Settings** (tab on the bottom right):
+1. **SMS Permission (`RECEIVE_SMS`)**: Tap **Grant** so ZopHop can read incoming SMS messages.
+2. **Notification Permission (`POST_NOTIFICATIONS`)**: Tap **Grant** (required on Android 13+) so ZopHop can show foreground status notifications.
+3. **Ignore Battery Optimization**: Tap **Ignore** and exempt ZopHop from battery optimization so background forwarding isn't delayed.
 
 ### Step 3: Add a Delivery Target Node
 1. Under **Delivery Target Nodes**, tap **+ Add Node**.
@@ -79,7 +79,7 @@ Open NtfySMS and navigate to **Settings** (tab on the bottom right):
 
 ### Step 5: Activate Forwarding
 Toggle the status switch in the top app bar to **ACTIVE**.
-The notification shade will display `🟢 NtfySMS Active`.
+The notification shade will display `🟢 ZopHop Active`.
 
 ---
 
@@ -129,26 +129,26 @@ services:
 ```
 
 #### 3. Setting Up Write-Only & Read-Only ACL Topic Permissions
-For optimal security, configure topic ACL permissions so NtfySMS has **write-only** access, while your receiver devices have **read-only** access:
+For optimal security, configure topic ACL permissions so ZopHop has **write-only** access, while your receiver devices have **read-only** access:
 
 ```bash
 # 1. Create separate user accounts
 ntfy user add publisher
 ntfy user add receiver
 
-# 2. Grant WRITE-ONLY permission on otp-* topics to NtfySMS app
+# 2. Grant WRITE-ONLY permission on otp-* topics to ZopHop app
 ntfy access publisher "otp-*" write-only
 
 # 3. Grant READ-ONLY permission on otp-* topics to Receiver App
 ntfy access receiver "otp-*" read-only
 
-# 4. Generate Bearer Token for NtfySMS
+# 4. Generate Bearer Token for ZopHop
 ntfy token add publisher
 ```
 
 - **Server URL**: `http://192.168.1.50:8080` or `https://ntfy.home.arpa`
 - **Topic**: `otp-myfeed`
-- **Access Token**: Paste the generated `tk_...` token into the **Access Token** field in NtfySMS.
+- **Access Token**: Paste the generated `tk_...` token into the **Access Token** field in ZopHop.
 
 ---
 
@@ -182,11 +182,11 @@ services:
 1. Open Gotify Web UI in your browser (`http://192.168.1.50:8081` or `https://gotify.example.com`).
 2. Log in with your admin account.
 3. Click **Apps** in the top navigation bar → Click **Create Application**.
-4. Enter name: `NtfySMS` → Click **CREATE**.
+4. Enter name: `ZopHop` → Click **CREATE**.
 5. Copy the generated **Token** (e.g., `A1b2C3d4E5f6`).
 
-#### 3. Enter Token in NtfySMS
-In NtfySMS, tap **+ Add Node** → Select **🔔 Gotify**:
+#### 3. Enter Token in ZopHop
+In ZopHop, tap **+ Add Node** → Select **🔔 Gotify**:
 - **Server URL**: `https://gotify.example.com`
 - **App Token**: Paste the generated `X-Gotify-Key` token (`A1b2C3d4E5f6`).
 - Tap **Save Node**.
@@ -196,15 +196,15 @@ In NtfySMS, tap **+ Add Node** → Select **🔔 Gotify**:
 ### Server Security Considerations & Best Practices
 
 1. **Reverse Proxy & Mandatory TLS/HTTPS**: Never expose raw HTTP ports to the open internet. Reverse proxy via Caddy, Nginx Proxy Manager, or Traefik to enforce TLS encryption.
-2. **Private Network Binding (Tailscale / WireGuard)**: Bind ntfy/Gotify to private Tailscale (`100.x.x.x`) or local IP ranges (`192.168.x.x`), and configure NtfySMS's **Require Active VPN** pre-check.
-3. **Least-Privilege ACL Tokens**: Never use admin credentials for forwarding. Use write-only tokens for NtfySMS and read-only tokens for receiver clients.
+2. **Private Network Binding (Tailscale / WireGuard)**: Bind ntfy/Gotify to private Tailscale (`100.x.x.x`) or local IP ranges (`192.168.x.x`), and configure ZopHop's **Require Active VPN** pre-check.
+3. **Least-Privilege ACL Tokens**: Never use admin credentials for forwarding. Use write-only tokens for ZopHop and read-only tokens for receiver clients.
 4. **Disable Anonymous Features**: Set `auth-default-access: "deny-all"` in ntfy to block unauthorized publishing.
 
 ---
 
 ## 4. Target Delivery Nodes & Node-Level Pre-Checks
 
-NtfySMS supports multiple target nodes simultaneously. You can add, edit, or toggle delivery nodes under **Settings → Delivery Target Nodes**.
+ZopHop supports multiple target nodes simultaneously. You can add, edit, or toggle delivery nodes under **Settings → Delivery Target Nodes**.
 
 ### Node-Level Pre-Checks
 Pre-checks pause forwarding when network conditions aren't met, preventing errors:
@@ -282,15 +282,15 @@ Below are tested regex patterns and payload templates for major Indian banks and
 ## 6. Status Notifications & Quick Settings Tile
 
 ### Persistent Status Notifications
-NtfySMS runs a low-priority foreground service (`SmsForwarderService`) to ensure Android does not terminate background monitoring:
+ZopHop runs a low-priority foreground service (`SmsForwarderService`) to ensure Android does not terminate background monitoring:
 
-- 🟢 **NtfySMS Active**: Normal background monitoring state.
+- 🟢 **ZopHop Active**: Normal background monitoring state.
 - ⏳ **Waiting on Pre-Condition**: Trigger paused (e.g., `SMS from VM-HDFCBK: Waiting for Tailscale Target (VPN missing)`).
 - 🚀 **Executing Forwarding Trigger**: Transmitting payload to target nodes.
 - ✅ **Forwarding Trigger Executed**: Delivery completed successfully.
 
 ### Quick Settings (QS) Tile
-Add the **NtfySMS Forwarder** tile to your Android Quick Settings shade to toggle SMS forwarding ON or OFF from anywhere.
+Add the **ZopHop Forwarder** tile to your Android Quick Settings shade to toggle SMS forwarding ON or OFF from anywhere.
 
 ---
 
@@ -327,12 +327,12 @@ Follow the step-by-step instructions below for your specific device manufacturer
 ### 📱 Xiaomi / Redmi / POCO (MIUI & HyperOS)
 
 1. **Enable Autostart Permission**:
-   - Open **Security App** → **Permissions** → **Autostart** → Locate **NtfySMS** → Toggle **ON**.
+   - Open **Security App** → **Permissions** → **Autostart** → Locate **ZopHop** → Toggle **ON**.
 2. **Set Battery Saver to No Restrictions**:
-   - Open **Settings** → **Apps** → **Manage Apps** → Select **NtfySMS**.
+   - Open **Settings** → **Apps** → **Manage Apps** → Select **ZopHop**.
    - Tap **Battery Saver** → Select **No Restrictions**.
 3. **Lock App in Recent Apps Screen**:
-   - Open the Recent Apps screen → Press & hold the **NtfySMS** window card → Tap the **Lock Icon** 🔒.
+   - Open the Recent Apps screen → Press & hold the **ZopHop** window card → Tap the **Lock Icon** 🔒.
 
 ---
 
@@ -340,7 +340,7 @@ Follow the step-by-step instructions below for your specific device manufacturer
 
 1. **Add to Never Sleeping Apps**:
    - Open **Settings** → **Battery and Device Care** → **Battery** → **Background Usage Limits**.
-   - Tap **Never Sleeping Apps** → Tap **+ (Add)** → Select **NtfySMS** → Tap **Add**.
+   - Tap **Never Sleeping Apps** → Tap **+ (Add)** → Select **ZopHop** → Tap **Add**.
 2. **Disable Auto-Optimization Restarts**:
    - Open **Settings** → **Device Care** → **Auto Optimization** → Turn **OFF** *Auto Restart*.
 
@@ -349,11 +349,11 @@ Follow the step-by-step instructions below for your specific device manufacturer
 ### 📱 OnePlus / Oppo / Realme (OxygenOS & ColorOS)
 
 1. **Allow Background Activity & Auto Launch**:
-   - Open **Settings** → **Apps** → **App Management** → Select **NtfySMS**.
+   - Open **Settings** → **Apps** → **App Management** → Select **ZopHop**.
    - Tap **Battery Usage** → Enable **Allow Background Activity** AND **Allow Auto Launch**.
 2. **Set Battery Optimization to Don't Optimize**:
    - Open **Settings** → **Battery** → **Advanced Settings** → **Optimize Battery Use**.
-   - Locate **NtfySMS** → Change selection to **Don't Optimize**.
+   - Locate **ZopHop** → Change selection to **Don't Optimize**.
 
 ---
 
@@ -361,16 +361,16 @@ Follow the step-by-step instructions below for your specific device manufacturer
 
 1. **Allow High Background Power Consumption**:
    - Open **Settings** → **Battery** → **Background Power Consumption Management**.
-   - Locate **NtfySMS** → Select **High Background Power Consumption**.
+   - Locate **ZopHop** → Select **High Background Power Consumption**.
 2. **Enable Autostart**:
-   - Open **Settings** → **Apps** → **Autostart** → Toggle **ON** for **NtfySMS**.
+   - Open **Settings** → **Apps** → **Autostart** → Toggle **ON** for **ZopHop**.
 
 ---
 
 ### 📱 Google Pixel / Motorola / Nokia (Stock Android)
 
 1. **Set App Battery Usage to Unrestricted**:
-   - Open **Settings** → **Apps** → **See All Apps** → Select **NtfySMS**.
+   - Open **Settings** → **Apps** → **See All Apps** → Select **ZopHop**.
    - Tap **App Battery Usage** (or *Battery*) → Change selection from *Optimized* to **Unrestricted**.
 
 ---
@@ -385,7 +385,7 @@ Follow the step-by-step instructions below for your specific device manufacturer
 
 ## 9. Security, Privacy & Data Hardening Architecture
 
-NtfySMS is engineered with strict local security and privacy protections:
+ZopHop is engineered with strict local security and privacy protections:
 
 1. **Encrypted Token Storage (`EncryptedSharedPreferences`)**:
    - All server access tokens, Bearer keys, and Gotify keys are encrypted at rest using AES-256 GCM authenticated encryption, backed by hardware keys in the Android KeyStore (`MasterKey`).
@@ -396,4 +396,4 @@ NtfySMS is engineered with strict local security and privacy protections:
 4. **Cloud Backup & Device Transfer Exclusion (`allowBackup="false"`)**:
    - Android cloud backup (`Google Drive`) and device-to-device transfer rules (`data_extraction_rules.xml` and `backup_rules.xml`) explicitly exclude the app database and preferences to prevent sensitive tokens from leaving the physical device.
 5. **No Analytics or Telemetry**:
-   - NtfySMS contains zero third-party analytics, crash reporting SDKs, tracking libraries, or external ads. Outgoing network requests are made strictly to your configured target delivery nodes.
+   - ZopHop contains zero third-party analytics, crash reporting SDKs, tracking libraries, or external ads. Outgoing network requests are made strictly to your configured target delivery nodes.

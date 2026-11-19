@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace = "in.ntfysms"
+    namespace = "dev.zophop"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "in.ntfysms"
+        applicationId = "dev.zophop"
         minSdk = 26
         targetSdk = 37
         versionCode = 1
@@ -34,10 +34,10 @@ android {
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
-            manifestPlaceholders["appName"] = "NtfySMS Debug"
+            manifestPlaceholders["appName"] = "ZopHop Debug"
         }
         release {
-            manifestPlaceholders["appName"] = "NtfySMS"
+            manifestPlaceholders["appName"] = "ZopHop"
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
@@ -72,7 +72,7 @@ androidComponents {
     onVariants { variant ->
         val suffix = if (variant.buildType == "debug") "-Debug" else ""
         variant.outputs.forEach { output ->
-            output.outputFileName.set("NtfySMS${suffix}-v1.0.0.apk")
+            output.outputFileName.set("ZopHop${suffix}-v1.0.0.apk")
         }
     }
 }

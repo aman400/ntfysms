@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "in.ntfysms.feature.preconditions"
+    namespace = "dev.zophop.feature.preconditions"
     compileSdk = 37
 
     defaultConfig {

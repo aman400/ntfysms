@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "in.ntfysms.feature.workflows"
+    namespace = "dev.zophop.feature.workflows"
     compileSdk = 37
 
     defaultConfig {

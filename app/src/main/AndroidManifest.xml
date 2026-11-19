@@ -29,7 +29,7 @@
     </queries>
 
     <application
-        android:name=".NtfySmsApplication"
+        android:name=".ZopHopApplication"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -37,12 +37,12 @@
         android:label="${appName}"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.NtfySMS">
+        android:theme="@style/Theme.ZopHop">
 
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.NtfySMS">
+            android:theme="@style/Theme.ZopHop">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -70,7 +70,7 @@
             android:name=".receiver.WorkflowCancelReceiver"
             android:exported="true">
             <intent-filter>
-                <action android:name="in.ntfysms.ACTION_CANCEL_WORKFLOW" />
+                <action android:name="dev.zophop.ACTION_CANCEL_WORKFLOW" />
             </intent-filter>
         </receiver>
 
@@ -82,7 +82,7 @@
 
         <service
             android:name=".service.NtfyNotificationListenerService"
-            android:label="NtfySMS Notification Reader"
+            android:label="ZopHop Notification Reader"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">
             <intent-filter>

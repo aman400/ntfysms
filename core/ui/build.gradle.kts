@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "in.ntfysms.core.ui"
+    namespace = "dev.zophop.core.ui"
     compileSdk = 37
 
     defaultConfig {
