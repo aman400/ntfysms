@@ -6,64 +6,38 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <group
-        android:pivotX="54"
-        android:pivotY="54"
-        android:scaleX="0.72"
-        android:scaleY="0.72">
+    <!-- Bolt-shaped workflow path (kept inside the 66dp safe zone) -->
+    <path
+        android:pathData="M64.07,31.23 L46.9,54.99 L62.09,54.99 L43.94,76.77"
+        android:strokeWidth="7.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="27"
+                android:endX="0"
+                android:endY="82">
+                <item android:offset="0" android:color="#FF6EE7B7" />
+                <item android:offset="1" android:color="#FF10B981" />
+            </gradient>
+        </aapt:attr>
+    </path>
 
-        <!-- Shadow Path -->
-        <path
-            android:pathData="M67.08,28.69 L45.14,59.06 L64.55,59.06 L41.34,86.9"
-            android:strokeColor="#000000"
-            android:strokeWidth="9.7"
-            android:strokeLineCap="round"
-            android:strokeLineJoin="round"
-            android:fillColor="#00000000" />
+    <!-- Start node (mint + emerald center) -->
+    <path
+        android:fillColor="#FFD1FAE5"
+        android:pathData="M57.14,31.23 a6.93,6.93 0 1,0 13.86,0 a6.93,6.93 0 1,0 -13.86,0" />
+    <path
+        android:fillColor="#FF059669"
+        android:pathData="M61.27,31.23 a2.8,2.8 0 1,0 5.6,0 a2.8,2.8 0 1,0 -5.6,0" />
 
-        <path
-            android:pathData="M67.08,28.69m-8.4,0a8.4,8.4 0 1,1 16.8,0a8.4,8.4 0 1,1 -16.8,0"
-            android:fillColor="#000000" />
-
-        <path
-            android:pathData="M41.34,86.9m-8.4,0a8.4,8.4 0 1,1 16.8,0a8.4,8.4 0 1,1 -16.8,0"
-            android:fillColor="#000000" />
-
-        <!-- Bolt-shaped Workflow Path -->
-        <path
-            android:pathData="M67.08,26.16 L45.14,56.53 L64.55,56.53 L41.34,84.38"
-            android:strokeWidth="9.7"
-            android:strokeLineCap="round"
-            android:strokeLineJoin="round">
-            <aapt:attr name="android:strokeColor">
-                <gradient
-                    android:startX="67.08"
-                    android:startY="26.16"
-                    android:endX="41.34"
-                    android:endY="84.38"
-                    android:type="linear">
-                    <item android:color="#6EE7B7" android:offset="0.0" />
-                    <item android:color="#10B981" android:offset="1.0" />
-                </gradient>
-            </aapt:attr>
-        </path>
-
-        <!-- Start Node Circle (Emerald/Mint) -->
-        <path
-            android:pathData="M67.08,26.16m-8.86,0a8.86,8.86 0 1,1 17.72,0a8.86,8.86 0 1,1 -17.72,0"
-            android:fillColor="#D1FAE5" />
-
-        <path
-            android:pathData="M67.08,26.16m-3.58,0a3.58,3.58 0 1,1 7.16,0a3.58,3.58 0 1,1 -7.16,0"
-            android:fillColor="#059669" />
-
-        <!-- End Node Circle (Amber) -->
-        <path
-            android:pathData="M41.34,84.38m-8.86,0a8.86,8.86 0 1,1 17.72,0a8.86,8.86 0 1,1 -17.72,0"
-            android:fillColor="#FBBF24" />
-
-        <path
-            android:pathData="M41.34,84.38m-3.58,0a3.58,3.58 0 1,1 7.16,0a3.58,3.58 0 1,1 -7.16,0"
-            android:fillColor="#451A03" />
-    </group>
+    <!-- End node (amber + dark center) -->
+    <path
+        android:fillColor="#FFFBBF24"
+        android:pathData="M37.01,76.77 a6.93,6.93 0 1,0 13.86,0 a6.93,6.93 0 1,0 -13.86,0" />
+    <path
+        android:fillColor="#FF451A03"
+        android:pathData="M41.14,76.77 a2.8,2.8 0 1,0 5.6,0 a2.8,2.8 0 1,0 -5.6,0" />
 </vector>
