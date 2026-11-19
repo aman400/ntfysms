@@ -1,39 +1,44 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <!-- Background Gradient -->
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#0F172A" />
-      <stop offset="50%" stop-color="#1E1B4B" />
-      <stop offset="100%" stop-color="#3730A3" />
+    <clipPath id="clip"><rect width="512" height="512" rx="116"/></clipPath>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5B21B6"/>
+      <stop offset="0.55" stop-color="#C026D3"/>
+      <stop offset="1" stop-color="#FB7185"/>
     </linearGradient>
-
-    <!-- Z Emblem Gradient -->
-    <linearGradient id="zGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38BDF8" />
-      <stop offset="50%" stop-color="#818CF8" />
-      <stop offset="100%" stop-color="#C084FC" />
-    </linearGradient>
-
-    <!-- Hop Arrow Arc Gradient -->
-    <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#38BDF8" />
-      <stop offset="100%" stop-color="#F472B6" />
+    <radialGradient id="light" gradientUnits="userSpaceOnUse" cx="120" cy="60" r="360">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="dark" gradientUnits="userSpaceOnUse" cx="460" cy="470" r="300">
+      <stop offset="0" stop-color="#FDBA74" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#FDBA74" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="bolt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FEF3C7"/>
     </linearGradient>
   </defs>
 
-  <!-- Background Base -->
-  <rect width="108" height="108" rx="24" fill="url(#bgGrad)" />
+  <g clip-path="url(#clip)">
+    <rect width="512" height="512" fill="url(#bg)"/>
+    <rect width="512" height="512" fill="url(#dark)"/>
+    <rect width="512" height="512" fill="url(#light)"/>
+  </g>
 
-  <!-- Concentric Rings -->
-  <circle cx="54" cy="54" r="42" fill="none" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="1" />
+  <!-- shadow -->
+  <g transform="translate(0 12)" opacity="0.25" fill="none" stroke="#2E0A4F" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M318 124 L214 268 L306 268 L196 400" stroke-width="46"/>
+    <circle cx="318" cy="124" r="40" fill="#2E0A4F" stroke="none"/>
+    <circle cx="196" cy="400" r="40" fill="#2E0A4F" stroke="none"/>
+  </g>
 
-  <!-- ZopHop "Z" Emblem -->
-  <path fill="url(#zGrad)" d="M34,36 L74,36 C77,36 78,39 76,41 L40,70 L74,70 C76,70 78,72 78,74 L78,74 C78,76 76,78 74,78 L34,78 C31,78 30,75 32,73 L68,44 L34,44 C32,44 30,42 30,40 L30,40 C30,38 32,36 34,36 Z" />
+  <!-- bolt-shaped workflow path -->
+  <path d="M318 124 L214 268 L306 268 L196 400" fill="none" stroke="url(#bolt)" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
 
-  <!-- Forward Hop Arc Arrow -->
-  <path fill="none" stroke="url(#arcGrad)" stroke-width="3.5" stroke-linecap="round" d="M38,30 C48,22 60,22 70,30" />
-
-  <!-- Node Dots -->
-  <circle cx="34" cy="36" r="3.5" fill="#38BDF8" />
-  <circle cx="74" cy="78" r="3.5" fill="#C084FC" />
+  <!-- end nodes -->
+  <circle cx="318" cy="124" r="42" fill="#FFFFFF"/>
+  <circle cx="318" cy="124" r="17" fill="#7E22CE"/>
+  <circle cx="196" cy="400" r="42" fill="#FEF3C7"/>
+  <circle cx="196" cy="400" r="17" fill="#F97316"/>
 </svg>
