@@ -3,7 +3,6 @@ package `in`.ntfysms.ui.preconditions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -61,7 +60,7 @@ private enum class PreconditionCategoryFilter {
 }
 
 /**
- * Modernized Preconditions Vault Screen.
+ * Modernized Preconditions Screen.
  */
 @Composable
 fun PreconditionsScreen(
@@ -80,7 +79,6 @@ fun PreconditionsScreen(
     var selectedCategoryFilter by remember { mutableStateOf(PreconditionCategoryFilter.ALL) }
 
     val activeCount = preconditions.count { it.isEnabled }
-    val retryCount = preconditions.count { it.onFailureAction.equals("RETRY", ignoreCase = true) }
 
     val filteredPreconditions = remember(preconditions, selectedCategoryFilter) {
         when (selectedCategoryFilter) {
@@ -110,82 +108,6 @@ fun PreconditionsScreen(
         ) {
             item { Spacer(modifier = Modifier.height(12.dp)) }
 
-            // Modern Hero Summary Card
-            item {
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.elevatedCardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    modifier = Modifier.size(40.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Default.Shield,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.size(22.dp)
-                                        )
-                                    }
-                                }
-
-                                Column {
-                                    Text(
-                                        text = "Rules Vault",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = "$activeCount Active • $retryCount Auto-Retrying",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-
-                            SuggestionChip(
-                                onClick = {},
-                                label = {
-                                    Text(
-                                        text = "${preconditions.size} Rules",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                },
-                                colors = SuggestionChipDefaults.suggestionChipColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    labelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            )
-                        }
-
-                        Text(
-                            text = "Configure network, VPN, HTTP healthchecks, and hardware preconditions to guard when workflow automations run.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
             // Category Filter Chips
             item {
                 LazyRow(
@@ -210,28 +132,28 @@ fun PreconditionsScreen(
                         FilterChip(
                             selected = selectedCategoryFilter == PreconditionCategoryFilter.NETWORK_VPN,
                             onClick = { selectedCategoryFilter = PreconditionCategoryFilter.NETWORK_VPN },
-                            label = { Text("🌐 Network/VPN", fontSize = 12.sp) }
+                            label = { Text("Network & VPN", fontSize = 12.sp) }
                         )
                     }
                     item {
                         FilterChip(
                             selected = selectedCategoryFilter == PreconditionCategoryFilter.HEALTHCHECK,
                             onClick = { selectedCategoryFilter = PreconditionCategoryFilter.HEALTHCHECK },
-                            label = { Text("🩺 Healthchecks", fontSize = 12.sp) }
+                            label = { Text("Healthchecks", fontSize = 12.sp) }
                         )
                     }
                     item {
                         FilterChip(
                             selected = selectedCategoryFilter == PreconditionCategoryFilter.HARDWARE_GPS,
                             onClick = { selectedCategoryFilter = PreconditionCategoryFilter.HARDWARE_GPS },
-                            label = { Text("📱 SIM & GPS", fontSize = 12.sp) }
+                            label = { Text("SIM & GPS", fontSize = 12.sp) }
                         )
                     }
                     item {
                         FilterChip(
                             selected = selectedCategoryFilter == PreconditionCategoryFilter.CHAINED,
                             onClick = { selectedCategoryFilter = PreconditionCategoryFilter.CHAINED },
-                            label = { Text("⛓️ Chained", fontSize = 12.sp) }
+                            label = { Text("Chained", fontSize = 12.sp) }
                         )
                     }
                 }
@@ -353,7 +275,7 @@ fun PreconditionsScreen(
         if (linkedWorkflows.isNotEmpty()) {
             AlertDialog(
                 onDismissRequest = { pendingDeletePrecondition = null },
-                title = { Text("⚠️ Cannot Delete Precondition") },
+                title = { Text("Cannot Delete Precondition") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Precondition '${prec.name}' is currently used in ${linkedWorkflows.size} workflow(s):")

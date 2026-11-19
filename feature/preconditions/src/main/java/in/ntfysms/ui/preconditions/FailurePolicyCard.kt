@@ -43,7 +43,7 @@ fun FailurePolicyCard(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Text(
-                text = "⚡ Failure & Retry Policy",
+                text = "Failure & Retry Policy",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
@@ -61,12 +61,12 @@ fun FailurePolicyCard(
                 FilterChip(
                     selected = onFailureAction == "FAIL_IMMEDIATELY",
                     onClick = { onFailureActionChanged("FAIL_IMMEDIATELY") },
-                    label = { Text("🛑 Fail Immediately", fontSize = 12.sp) }
+                    label = { Text("Fail Immediately", fontSize = 12.sp) }
                 )
                 FilterChip(
                     selected = onFailureAction == "RETRY",
                     onClick = { onFailureActionChanged("RETRY") },
-                    label = { Text("🔄 Wait & Retry", fontSize = 12.sp) }
+                    label = { Text("Wait & Retry", fontSize = 12.sp) }
                 )
             }
 

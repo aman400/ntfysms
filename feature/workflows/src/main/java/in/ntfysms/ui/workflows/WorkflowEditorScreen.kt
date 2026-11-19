@@ -569,13 +569,17 @@ fun WorkflowNodeCardItem(
 
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { dismissValue ->
-            if (dismissValue == SwipeToDismissBoxValue.EndToStart) {
-                if (!isFirst) onDeleteNode()
-                false
-            } else if (dismissValue == SwipeToDismissBoxValue.StartToEnd) {
-                onEditNode()
-                false
-            } else false
+            when (dismissValue) {
+                SwipeToDismissBoxValue.EndToStart -> {
+                    if (!isFirst) onDeleteNode()
+                    false
+                }
+                SwipeToDismissBoxValue.StartToEnd -> {
+                    onEditNode()
+                    false
+                }
+                else -> false
+            }
         }
     )
 

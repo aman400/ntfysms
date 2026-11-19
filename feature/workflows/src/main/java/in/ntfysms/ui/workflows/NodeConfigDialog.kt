@@ -79,6 +79,7 @@ fun NodeConfigBottomSheet(
     node: WorkflowNode,
     credentials: List<Credential> = emptyList(),
     vaultPreconditions: List<PreconditionEntity> = emptyList(),
+    showPreconditionsGuard: Boolean = true,
     hasNotificationListenerPermission: Boolean = true,
     hasPostNotificationsPermission: Boolean = true,
     hasSmsPermission: Boolean = true,
@@ -346,9 +347,11 @@ fun NodeConfigBottomSheet(
                                 }
                             }
 
-                            val attachedPreconditions = vaultPreconditions
-                                .filter { attachedVaultPrecIds.contains(it.id) && it.isEnabled }
-                                .map { it.toDomain() }
+                            val attachedPreconditions = if (showPreconditionsGuard) {
+                                vaultPreconditions
+                                    .filter { attachedVaultPrecIds.contains(it.id) && it.isEnabled }
+                                    .map { it.toDomain() }
+                            } else emptyList()
 
                             val updatedNode = node.copy(
                                 name = name,
@@ -911,89 +914,91 @@ fun NodeConfigBottomSheet(
                 else -> {}
             }
 
-            // Precondition Vault Attachment Section
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "🛡️ Precondition Rules Guard",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                text = "Attach saved vault precondition rules that must pass before this node executes.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (showPreconditionsGuard) {
+                // Precondition Vault Attachment Section
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "🛡️ Precondition Rules Guard",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = "Attach saved vault precondition rules that must pass before this node executes.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
-            // Attached Preconditions Badges & Remove Actions
-            if (attachedVaultPrecIds.isNotEmpty()) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    attachedVaultPrecIds.forEach { precId ->
-                        val vaultPrec = vaultPreconditions.find { it.id == precId }
-                        if (vaultPrec != null) {
-                            SuggestionChip(
-                                onClick = {
-                                    attachedVaultPrecIds = attachedVaultPrecIds - precId
-                                },
-                                label = { Text("🔒 ${vaultPrec.name} ✕") },
-                                colors = SuggestionChipDefaults.suggestionChipColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    labelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                // Attached Preconditions Badges & Remove Actions
+                if (attachedVaultPrecIds.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        attachedVaultPrecIds.forEach { precId ->
+                            val vaultPrec = vaultPreconditions.find { it.id == precId }
+                            if (vaultPrec != null) {
+                                SuggestionChip(
+                                    onClick = {
+                                        attachedVaultPrecIds = attachedVaultPrecIds - precId
+                                    },
+                                    label = { Text("🔒 ${vaultPrec.name} ✕") },
+                                    colors = SuggestionChipDefaults.suggestionChipColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        labelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                 }
-            }
 
-            // Search & Attach Precondition Dropdown
-            ExposedDropdownMenuBox(
-                expanded = expandedPrecMenu,
-                onExpandedChange = { expandedPrecMenu = !expandedPrecMenu }
-            ) {
-                OutlinedTextField(
-                    value = precSearchQuery,
-                    onValueChange = {
-                        precSearchQuery = it
-                        expandedPrecMenu = true
-                    },
-                    label = { Text("🔍 Search & Attach Precondition Rule...") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedPrecMenu) },
-                    modifier = Modifier
-                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth(),
-                    singleLine = true,
-                    supportingText = { Text("Search and attach vault guard rules.", fontSize = 10.sp) }
-                )
-
-                ExposedDropdownMenu(
+                // Search & Attach Precondition Dropdown
+                ExposedDropdownMenuBox(
                     expanded = expandedPrecMenu,
-                    onDismissRequest = { expandedPrecMenu = false }
+                    onExpandedChange = { expandedPrecMenu = !expandedPrecMenu }
                 ) {
-                    filteredVaultPreconditions.forEach { prec ->
-                        val isAttached = attachedVaultPrecIds.contains(prec.id)
-                        DropdownMenuItem(
-                            text = { Text("${if (isAttached) "✓ " else "+ "} ${prec.name} (${prec.type})") },
-                            onClick = {
-                                if (isAttached) {
-                                    attachedVaultPrecIds = attachedVaultPrecIds - prec.id
-                                } else {
-                                    attachedVaultPrecIds = attachedVaultPrecIds + prec.id
+                    OutlinedTextField(
+                        value = precSearchQuery,
+                        onValueChange = {
+                            precSearchQuery = it
+                            expandedPrecMenu = true
+                        },
+                        label = { Text("🔍 Search & Attach Precondition Rule...") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedPrecMenu) },
+                        modifier = Modifier
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth(),
+                        singleLine = true,
+                        supportingText = { Text("Search and attach vault guard rules.", fontSize = 10.sp) }
+                    )
+
+                    ExposedDropdownMenu(
+                        expanded = expandedPrecMenu,
+                        onDismissRequest = { expandedPrecMenu = false }
+                    ) {
+                        filteredVaultPreconditions.forEach { prec ->
+                            val isAttached = attachedVaultPrecIds.contains(prec.id)
+                            DropdownMenuItem(
+                                text = { Text("${if (isAttached) "✓ " else "+ "} ${prec.name} (${prec.type})") },
+                                onClick = {
+                                    if (isAttached) {
+                                        attachedVaultPrecIds = attachedVaultPrecIds - prec.id
+                                    } else {
+                                        attachedVaultPrecIds = attachedVaultPrecIds + prec.id
+                                    }
                                 }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text("➕ Create in Preconditions...") },
+                            onClick = {
+                                expandedPrecMenu = false
+                                onDismiss()
                             }
                         )
                     }
-                    DropdownMenuItem(
-                        text = { Text("➕ Create in Preconditions Vault...") },
-                        onClick = {
-                            expandedPrecMenu = false
-                            onDismiss()
-                        }
-                    )
                 }
             }
 
@@ -1077,7 +1082,7 @@ fun AutocompleteTextField(
             },
             supportingText = {
                 Text(
-                    text = "💡 Type '$' or click ⟨/⟩ to insert chain variables (${commonVariables.take(4).joinToString(", ")}...)",
+                    text = "💡 Type '$' or click ⟨/⟩ to insert variables (${commonVariables.take(4).joinToString(", ")}...)",
                     style = MaterialTheme.typography.labelSmall,
                     fontSize = 10.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

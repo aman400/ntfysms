@@ -6,12 +6,18 @@ import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.DataObject
 import androidx.compose.material.icons.filled.DeviceHub
 import androidx.compose.material.icons.filled.Http
+import androidx.compose.material.icons.filled.LocalHospital
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NotificationImportant
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Rule
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material.icons.filled.Transform
+import androidx.compose.material.icons.filled.VpnKey
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.ui.graphics.vector.ImageVector
 import `in`.ntfysms.domain.model.NodeType
 import `in`.ntfysms.domain.model.PreconditionType
@@ -79,18 +85,20 @@ object WorkflowUiHelper {
             PreconditionType.HEALTH_CHECK.name -> "HTTP Endpoint Healthcheck"
             PreconditionType.SIM_CHECK.name -> "SIM Card Ready Check"
             PreconditionType.GPS_CHECK.name -> "GPS Location Service Check"
+            PreconditionType.CHAINED_CHECK.name -> "Chained Pipeline"
             else -> type
         }
     }
 
-    fun getPreconditionIconStr(type: String): String {
+    fun getPreconditionIcon(type: String): ImageVector {
         return when (type) {
-            PreconditionType.INTERNET_CHECK.name -> "🌐"
-            PreconditionType.VPN_CHECK.name -> "🔐"
-            PreconditionType.HEALTH_CHECK.name -> "🩺"
-            PreconditionType.SIM_CHECK.name -> "📱"
-            PreconditionType.GPS_CHECK.name -> "📍"
-            else -> "🛡️"
+            PreconditionType.INTERNET_CHECK.name -> Icons.Default.Wifi
+            PreconditionType.VPN_CHECK.name -> Icons.Default.VpnKey
+            PreconditionType.HEALTH_CHECK.name -> Icons.Default.LocalHospital
+            PreconditionType.SIM_CHECK.name -> Icons.Default.PhoneAndroid
+            PreconditionType.GPS_CHECK.name -> Icons.Default.LocationOn
+            PreconditionType.CHAINED_CHECK.name -> Icons.Default.DeviceHub
+            else -> Icons.Default.Security
         }
     }
 }

@@ -10,6 +10,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,6 +30,8 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,13 +49,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import `in`.ntfysms.data.PreconditionEntity
+import `in`.ntfysms.domain.model.NodeType
 import `in`.ntfysms.domain.model.Workflow
 import `in`.ntfysms.ui.credentials.CredentialsScreen
 import `in`.ntfysms.ui.preconditions.PreconditionEditorScreen
 import `in`.ntfysms.ui.preconditions.PreconditionsScreen
 import `in`.ntfysms.ui.workflows.TestRunLogBottomSheet
 import `in`.ntfysms.ui.workflows.WorkflowEditorScreen
-import `in`.ntfysms.ui.workflows.WorkflowLogsScreen
+import `in`.ntfysms.ui.workflows.WorkflowLogsBottomSheet
 import `in`.ntfysms.ui.workflows.WorkflowsListScreen
 
 enum class AppTab {
@@ -159,14 +163,14 @@ fun MainAppScreen(
                 )
             }
             is MainScreenDestination.ViewLogs -> {
-                WorkflowLogsScreen(
+                WorkflowLogsBottomSheet(
                     workflow = destination.workflow,
                     logsFlow = viewModel.getLogsForWorkflow(destination.workflow.id),
                     onClearLogs = { viewModel.clearLogsForWorkflow(destination.workflow.id) },
                     onRetryWorkflowFromFailedNode = { wf, failedNodeId, onProgress, onResult ->
                         viewModel.retryWorkflowFromFailedNode(wf, failedNodeId, onProgress, onResult)
                     },
-                    onBack = { activeLogsWorkflow = null }
+                    onDismiss = { activeLogsWorkflow = null }
                 )
             }
             is MainScreenDestination.EditPrecondition -> {
@@ -192,16 +196,70 @@ fun MainAppScreen(
                     topBar = {
                         TopAppBar(
                             title = {
-                                Text(
-                                    text = when (selectedTab) {
-                                        AppTab.WORKFLOWS -> "Workflows Engine"
-                                        AppTab.PRECONDITIONS -> "Preconditions Vault"
-                                        AppTab.CREDENTIALS -> "Credential Vault"
-                                        AppTab.SETTINGS -> "Settings & Permissions"
-                                    },
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Column {
+                                    Text(
+                                        text = when (selectedTab) {
+                                            AppTab.WORKFLOWS -> "Workflows"
+                                            AppTab.PRECONDITIONS -> "Preconditions"
+                                            AppTab.CREDENTIALS -> "Credentials"
+                                            AppTab.SETTINGS -> "Settings & Permissions"
+                                        },
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    when (selectedTab) {
+                                        AppTab.WORKFLOWS -> {
+                                            val autoActiveCount = workflows.count { it.isEnabled && it.nodes.firstOrNull()?.type != NodeType.MANUAL_TRIGGER }
+                                            val manualCount = workflows.count { it.nodes.firstOrNull()?.type == NodeType.MANUAL_TRIGGER }
+                                            Text(
+                                                text = "$autoActiveCount Auto Active • $manualCount Manual",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        AppTab.PRECONDITIONS -> {
+                                            val activeCount = preconditions.count { it.isEnabled }
+                                            Text(
+                                                text = "$activeCount Active • ${if (uiState.isEnabled) "Engine enabled" else "Engine disabled"}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        AppTab.CREDENTIALS -> {
+                                            Text(
+                                                text = "${credentials.size} Credentials Stored",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        else -> {}
+                                    }
+                                }
+                            },
+                            actions = {
+                                val chipText = when (selectedTab) {
+                                    AppTab.WORKFLOWS -> "${workflows.size} Workflows"
+                                    AppTab.PRECONDITIONS -> "${preconditions.size} Rules"
+                                    AppTab.CREDENTIALS -> "${credentials.size} Keys"
+                                    else -> null
+                                }
+                                if (chipText != null) {
+                                    SuggestionChip(
+                                        onClick = {},
+                                        label = {
+                                            Text(
+                                                text = chipText,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        },
+                                        colors = SuggestionChipDefaults.suggestionChipColors(
+                                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                            labelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                        ),
+                                        modifier = Modifier.padding(end = 12.dp)
+                                    )
+                                }
                             },
                             colors = TopAppBarDefaults.topAppBarColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainer
@@ -247,7 +305,7 @@ fun MainAppScreen(
                             NavigationBarItem(
                                 selected = selectedTab == AppTab.CREDENTIALS,
                                 onClick = { selectedTab = AppTab.CREDENTIALS },
-                                label = { Text("Credentials", fontSize = 11.sp) },
+                                label = { Text("Vault", fontSize = 11.sp) },
                                 icon = {
                                     Icon(
                                         imageVector = Icons.Default.Lock,
@@ -284,140 +342,127 @@ fun MainAppScreen(
                             .fillMaxSize()
                             .padding(innerPadding)
                     ) {
-                        AnimatedContent(
-                            targetState = selectedTab,
-                            transitionSpec = {
-                                val isForward = targetState.ordinal > initialState.ordinal
-                                (fadeIn(animationSpec = tween(220)) + slideInHorizontally(animationSpec = tween(220)) { width -> if (isForward) width / 4 else -width / 4 }) togetherWith
-                                (fadeOut(animationSpec = tween(180)) + slideOutHorizontally(animationSpec = tween(180)) { width -> if (isForward) -width / 4 else width / 4 })
-                            },
-                            label = "TabAnimation"
-                        ) { targetTab ->
-                            when (targetTab) {
-                                AppTab.WORKFLOWS -> {
-                                    WorkflowsListScreen(
-                                        workflows = workflows,
-                                        hasNotificationListenerPermission = uiState.hasNotificationListenerPermission,
-                                        hasPostNotificationsPermission = hasNotificationPermission,
-                                        hasSmsPermission = hasSmsPermission,
-                                        onRequestSmsPermission = onRequestSmsPermission,
-                                        onRequestPostNotificationsPermission = onRequestNotificationPermission,
-                                        onToggleWorkflow = { id, enabled ->
-                                            viewModel.setWorkflowEnabled(id, enabled)
-                                        },
-                                        onRunManualWorkflow = { wf ->
-                                            viewModel.testRunWorkflow(wf) { _ -> }
-                                        },
-                                        onSaveWorkflow = { wf ->
-                                            viewModel.saveWorkflow(wf)
-                                        },
-                                        onDeleteWorkflow = { id ->
-                                            viewModel.deleteWorkflow(id)
-                                        },
-                                        onEditWorkflow = { wf -> activeEditingWorkflow = wf },
-                                        onViewLogs = { wf -> activeLogsWorkflow = wf },
-                                        onGetLogsForWorkflowFlow = { id -> viewModel.getLogsForWorkflow(id) },
-                                        onClearLogsForWorkflow = { id -> viewModel.clearLogsForWorkflow(id) },
-                                        onRetryWorkflowFromFailedNode = { wf, failedNodeId, onProgress, onResult ->
-                                            viewModel.retryWorkflowFromFailedNode(wf, failedNodeId, onProgress, onResult)
-                                        }
-                                    )
-                                }
-                                AppTab.PRECONDITIONS -> {
-                                    PreconditionsScreen(
-                                        preconditions = preconditions,
-                                        credentials = credentials,
-                                        workflows = workflows,
-                                        onSavePrecondition = { prec -> viewModel.savePrecondition(prec) },
-                                        onDeletePrecondition = { id -> viewModel.deletePrecondition(id) },
-                                        onTestPreconditionWithProgress = { entity, onProgress, onResult ->
-                                            viewModel.testPreconditionWithProgress(entity, onProgress, onResult)
-                                        },
-                                        onAddPrecondition = { showAddPreconditionScreen = true },
-                                        onEditPrecondition = { prec -> activeEditingPrecondition = prec }
-                                    )
-                                }
-                                AppTab.CREDENTIALS -> {
-                                    CredentialsScreen(
-                                        viewModel = viewModel
-                                    )
-                                }
-                                AppTab.SETTINGS -> {
-                                    SettingsScreen(
-                                        viewModel = viewModel,
-                                        hasSmsPermission = hasSmsPermission,
-                                        onRequestSmsPermission = onRequestSmsPermission,
-                                        hasNotificationPermission = hasNotificationPermission,
-                                        onRequestNotificationPermission = onRequestNotificationPermission
-                                    )
-                                }
+                        when (selectedTab) {
+                            AppTab.WORKFLOWS -> {
+                                WorkflowsListScreen(
+                                    workflows = workflows,
+                                    onToggleWorkflow = { id, enabled ->
+                                        viewModel.setWorkflowEnabled(id, enabled)
+                                    },
+                                    onSaveWorkflow = { wf ->
+                                        viewModel.saveWorkflow(wf)
+                                    },
+                                    onDeleteWorkflow = { id ->
+                                        viewModel.deleteWorkflow(id)
+                                    },
+                                    onEditWorkflow = { wf -> activeEditingWorkflow = wf },
+                                    onViewLogs = { wf -> activeLogsWorkflow = wf },
+                                    onGetLogsForWorkflowFlow = { id -> viewModel.getLogsForWorkflow(id) },
+                                    onClearLogsForWorkflow = { id -> viewModel.clearLogsForWorkflow(id) },
+                                    onRetryWorkflowFromFailedNode = { wf, failedNodeId, onProgress, onResult ->
+                                        viewModel.retryWorkflowFromFailedNode(wf, failedNodeId, onProgress, onResult)
+                                    }
+                                )
+                            }
+                            AppTab.PRECONDITIONS -> {
+                                PreconditionsScreen(
+                                    preconditions = preconditions,
+                                    credentials = credentials,
+                                    workflows = workflows,
+                                    onSavePrecondition = { prec -> viewModel.savePrecondition(prec) },
+                                    onDeletePrecondition = { id -> viewModel.deletePrecondition(id) },
+                                    onTestPreconditionWithProgress = { entity, onProgress, onResult ->
+                                        viewModel.testPreconditionWithProgress(entity, onProgress, onResult)
+                                    },
+                                    onAddPrecondition = { showAddPreconditionScreen = true },
+                                    onEditPrecondition = { prec -> activeEditingPrecondition = prec }
+                                )
+                            }
+                            AppTab.CREDENTIALS -> {
+                                CredentialsScreen(
+                                    viewModel = viewModel
+                                )
+                            }
+                            AppTab.SETTINGS -> {
+                                SettingsScreen(
+                                    viewModel = viewModel,
+                                    hasSmsPermission = hasSmsPermission,
+                                    onRequestSmsPermission = onRequestSmsPermission,
+                                    hasNotificationPermission = hasNotificationPermission,
+                                    onRequestNotificationPermission = onRequestNotificationPermission
+                                )
                             }
                         }
+                    }
 
-                        // Floating / Sticky Execution Banner across screen tabs
-                        activeExecutionState?.let { activeState ->
-                            if (activeState.isExecuting) {
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .align(Alignment.TopCenter)
-                                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    shape = RoundedCornerShape(12.dp),
-                                    tonalElevation = 6.dp
+                    // Floating / Sticky Execution Banner across screen tabs
+                    activeExecutionState?.let { activeState ->
+                        if (activeState.isExecuting) {
+                            Surface(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                                    .padding(bottom = 80.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                                tonalElevation = 8.dp,
+                                shadowElevation = 6.dp
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.weight(1f)
                                     ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(16.dp),
-                                                strokeWidth = 2.dp,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                                            )
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                                        )
+                                        Column {
                                             Text(
-                                                text = "⚡ Executing: ${activeState.workflowName}",
+                                                text = "Executing: ${activeState.workflowName}",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                                            )
+                                            Text(
+                                                text = "Step: ${activeState.steps.lastOrNull()?.nodeName ?: "Running..."}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
                                             )
                                         }
+                                    }
 
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            TextButton(
-                                                onClick = { showActiveExecutionSheet = true }
-                                            ) {
-                                                Text("View Stepper", fontSize = 11.sp)
-                                            }
-                                            TextButton(
-                                                onClick = { viewModel.cancelWorkflowExecution(activeState.workflowId) }
-                                            ) {
-                                                Text("Cancel", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-                                            }
-                                        }
+                                    TextButton(
+                                        onClick = { showActiveExecutionSheet = true }
+                                    ) {
+                                        Text("View", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onTertiaryContainer)
                                     }
                                 }
                             }
                         }
-
-                        if (showActiveExecutionSheet && activeExecutionState != null) {
-                            TestRunLogBottomSheet(
-                                workflowName = activeExecutionState!!.workflowName,
-                                steps = activeExecutionState!!.steps,
-                                isTesting = activeExecutionState!!.isExecuting,
-                                onCancelExecution = { viewModel.cancelWorkflowExecution(activeExecutionState!!.workflowId) },
-                                onDismiss = { showActiveExecutionSheet = false }
-                            )
-                        }
                     }
                 }
             }
+        }
+    }
+
+    if (showActiveExecutionSheet && activeExecutionState != null) {
+        val activeState = activeExecutionState!!
+        val wf = workflows.find { it.id == activeState.workflowId }
+        if (wf != null) {
+            TestRunLogBottomSheet(
+                workflowName = activeState.workflowName,
+                steps = activeState.steps,
+                isTesting = activeState.isExecuting,
+                onCancelExecution = { viewModel.cancelWorkflowExecution(wf.id) },
+                onDismiss = { showActiveExecutionSheet = false }
+            )
         }
     }
 }

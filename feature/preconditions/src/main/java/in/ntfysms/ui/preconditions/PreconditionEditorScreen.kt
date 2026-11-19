@@ -30,23 +30,25 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FabPosition
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -55,13 +57,14 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SuggestionChip
-import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,10 +74,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -108,15 +113,13 @@ fun PreconditionEditorScreen(
     onDismiss: () -> Unit,
     onSave: (PreconditionEntity) -> Unit
 ) {
-    val context = LocalContext.current
-
     var name by remember { mutableStateOf(precondition?.name ?: "") }
     var selectedType by remember { mutableStateOf(precondition?.type ?: PreconditionType.INTERNET_CHECK.name) }
     var isEnabled by remember { mutableStateOf(precondition?.isEnabled ?: (precondition?.type != PreconditionType.CHAINED_CHECK.name)) }
     var expandedTypeMenu by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showDiscardDialog by remember { mutableStateOf(false) }
-    var showTopOverflowMenu by remember { mutableStateOf(false) }
+    var showSaveConfirmDialog by remember { mutableStateOf(false) }
 
     // Healthcheck HTTP fields
     var targetUrl by remember { mutableStateOf(precondition?.targetUrl ?: "https://example.com/health") }
@@ -333,22 +336,6 @@ fun PreconditionEditorScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(if (precondition == null) "Add Precondition" else "Edit Precondition")
-                        if (hasUnsavedChanges) {
-                            SuggestionChip(
-                                onClick = {},
-                                label = {
-                                    Text(
-                                        text = "• Unsaved",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                },
-                                colors = SuggestionChipDefaults.suggestionChipColors(
-                                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.8f),
-                                    labelColor = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                            )
-                        }
                     }
                 },
                 navigationIcon = {
@@ -367,165 +354,91 @@ fun PreconditionEditorScreen(
                     }
                 },
                 actions = {
-                    Box {
-                        IconButton(
-                            onClick = { showTopOverflowMenu = true },
-                            enabled = !isTestingSheet
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "More Options"
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = showTopOverflowMenu,
-                            onDismissRequest = { showTopOverflowMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("View Stepper History") },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.History,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                },
-                                enabled = sheetTestSteps.isNotEmpty(),
-                                onClick = {
-                                    showTopOverflowMenu = false
-                                    showTestStepperSheet = true
-                                }
-                            )
-                        }
+                    Button(
+                        onClick = {
+                            if (name.isBlank()) {
+                                errorMessage = "Precondition name cannot be blank."
+                                return@Button
+                            }
+                            if (selectedType == PreconditionType.HEALTH_CHECK.name && targetUrl.isBlank()) {
+                                errorMessage = "Healthcheck target URL cannot be blank."
+                                return@Button
+                            }
+                            errorMessage = null
+                            showSaveConfirmDialog = true
+                        },
+                        enabled = hasUnsavedChanges && !isTestingSheet
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Save")
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
                 }
             )
         },
-        bottomBar = {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surfaceContainer,
-                tonalElevation = 6.dp
+        floatingActionButton = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 20.dp, vertical = 14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            val tempEntity = PreconditionEntity(
-                                id = precondition?.id ?: UUID.randomUUID().toString(),
-                                name = name,
-                                type = selectedType,
-                                isEnabled = isEnabled,
-                                targetUrl = targetUrl,
-                                method = method,
-                                headers = headers,
-                                expectedStatus = expectedStatus.toIntOrNull() ?: 200,
-                                requiredCarrier = requiredCarrier,
-                                credentialId = credentialId,
-                                pipelineJson = if (selectedType == PreconditionType.CHAINED_CHECK.name) pipelineJson else "",
-                                onFailureAction = onFailureAction,
-                                maxRetries = maxRetries.toIntOrNull() ?: 3,
-                                retryIntervalSeconds = retryIntervalSeconds.toIntOrNull() ?: 30,
-                                showNotificationOnFailure = showNotificationOnFailure
-                            )
-                            isTestingSheet = true
-                            showTestStepperSheet = true
-                            sheetTestResult = null
-                            sheetTestSteps = emptyList()
-                            onTestPreconditionWithProgress?.invoke(
-                                tempEntity,
-                                { steps -> sheetTestSteps = steps },
-                                { res ->
-                                    isTestingSheet = false
-                                    sheetTestResult = res
-                                }
-                            )
-                        },
-                        enabled = !isTestingSheet
-                    ) {
-                        if (isTestingSheet) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.height(16.dp).width(16.dp),
-                                strokeWidth = 2.dp
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Verifying...", fontSize = 12.sp)
-                        } else {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Test", fontSize = 12.sp)
-                        }
-                    }
+                ExtendedFloatingActionButton(
+                    onClick = {
+                        val tempEntity = PreconditionEntity(
+                            id = precondition?.id ?: UUID.randomUUID().toString(),
+                            name = name,
+                            type = selectedType,
+                            isEnabled = isEnabled,
+                            targetUrl = targetUrl,
+                            method = method,
+                            headers = headers,
+                            expectedStatus = expectedStatus.toIntOrNull() ?: 200,
+                            requiredCarrier = requiredCarrier,
+                            credentialId = credentialId,
+                            pipelineJson = if (selectedType == PreconditionType.CHAINED_CHECK.name) pipelineJson else "",
+                            onFailureAction = onFailureAction,
+                            maxRetries = maxRetries.toIntOrNull() ?: 3,
+                            retryIntervalSeconds = retryIntervalSeconds.toIntOrNull() ?: 30,
+                            showNotificationOnFailure = showNotificationOnFailure
+                        )
+                        isTestingSheet = true
+                        showTestStepperSheet = true
+                        sheetTestResult = null
+                        sheetTestSteps = emptyList()
+                        onTestPreconditionWithProgress?.invoke(
+                            tempEntity,
+                            { steps -> sheetTestSteps = steps },
+                            { res ->
+                                isTestingSheet = false
+                                sheetTestResult = res
+                            }
+                        )
+                    },
+                    icon = { Icon(Icons.Default.PlayArrow, contentDescription = "Test") },
+                    text = { Text(if (isTestingSheet) "Verifying..." else "Test") },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                )
 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(
-                            onClick = {
-                                if (hasUnsavedChanges) {
-                                    showDiscardDialog = true
-                                } else {
-                                    onDismiss()
-                                }
-                            },
-                            enabled = !isTestingSheet
-                        ) {
-                            Text("Cancel")
-                        }
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Button(
-                            onClick = {
-                                if (name.isBlank()) {
-                                    errorMessage = "Precondition name cannot be blank."
-                                    return@Button
-                                }
-                                if (selectedType == PreconditionType.HEALTH_CHECK.name && targetUrl.isBlank()) {
-                                    errorMessage = "Healthcheck target URL cannot be blank."
-                                    return@Button
-                                }
-
-                                errorMessage = null
-                                val entity = (precondition ?: PreconditionEntity(
-                                    id = UUID.randomUUID().toString(),
-                                    name = name,
-                                    type = selectedType
-                                )).copy(
-                                    name = name,
-                                    type = selectedType,
-                                    isEnabled = isEnabled,
-                                    targetUrl = targetUrl,
-                                    method = method,
-                                    headers = headers,
-                                    expectedStatus = expectedStatus.toIntOrNull() ?: 200,
-                                    requiredCarrier = requiredCarrier,
-                                    credentialId = credentialId,
-                                    pipelineJson = if (selectedType == PreconditionType.CHAINED_CHECK.name) pipelineJson else "",
-                                    onFailureAction = onFailureAction,
-                                    maxRetries = maxRetries.toIntOrNull() ?: 3,
-                                    retryIntervalSeconds = retryIntervalSeconds.toIntOrNull() ?: 30,
-                                    showNotificationOnFailure = showNotificationOnFailure,
-                                    updatedAt = System.currentTimeMillis()
-                                )
-                                onSave(entity)
-                            },
-                            enabled = !isTestingSheet
-                        ) {
-                            Text("Save")
-                        }
-                    }
+                if (selectedType == PreconditionType.CHAINED_CHECK.name) {
+                    ExtendedFloatingActionButton(
+                        onClick = { showAddNodeDialog = true },
+                        icon = { Icon(Icons.Default.Add, contentDescription = "Add Step") },
+                        text = { Text("Add Step") },
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 }
             }
-        }
-    ) { padding ->
+        },
+        floatingActionButtonPosition = FabPosition.Center
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(innerPadding)
                 .padding(horizontal = 20.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -583,8 +496,7 @@ fun PreconditionEditorScreen(
                 onValueChange = { name = it },
                 label = { Text("Precondition Name") },
                 modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                enabled = !isTestingSheet
+                singleLine = true
             )
 
             // Direct switch toggle without forced execution
@@ -768,27 +680,25 @@ fun PreconditionEditorScreen(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Pipeline Steps (${chainNodes.size})",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        OutlinedButton(
-                            onClick = { showAddNodeDialog = true },
-                            modifier = Modifier.height(32.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                            enabled = !isTestingSheet
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Add Step", fontSize = 11.sp)
-                        }
-                    }
+                    // Failure Policy Accordion moved above pipeline steps
+                    FailurePolicyAccordion(
+                        onFailureAction = onFailureAction,
+                        onFailureActionChanged = { onFailureAction = it },
+                        maxRetries = maxRetries,
+                        onMaxRetriesChanged = { maxRetries = it },
+                        retryIntervalSeconds = retryIntervalSeconds,
+                        onRetryIntervalSecondsChanged = { retryIntervalSeconds = it },
+                        showNotificationOnFailure = showNotificationOnFailure,
+                        onShowNotificationOnFailureChanged = { showNotificationOnFailure = it }
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Pipeline Steps (${chainNodes.size})",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
 
                     var chainCardHeightPx by remember { mutableFloatStateOf(100f) }
 
@@ -801,119 +711,147 @@ fun PreconditionEditorScreen(
                                 .graphicsLayer { translationY = dragChainOffsetY }
                         } else Modifier
 
-                        OutlinedCard(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(dragModifier)
-                                .onGloballyPositioned { layoutCoordinates ->
-                                    if (layoutCoordinates.size.height > 0) {
-                                        chainCardHeightPx = layoutCoordinates.size.height.toFloat()
+                        val dismissState = rememberSwipeToDismissBoxState(
+                            confirmValueChange = { dismissValue ->
+                                if (dismissValue == SwipeToDismissBoxValue.EndToStart) {
+                                    if (!isTrigger) {
+                                        val newNodes = chainNodes.filterNot { it.id == node.id }
+                                        chainNodes = newNodes
+                                        val newConns = mutableListOf<WorkflowConnection>()
+                                        for (i in 0 until newNodes.size - 1) {
+                                            newConns.add(WorkflowConnection(fromNodeId = newNodes[i].id, toNodeId = newNodes[i + 1].id))
+                                        }
+                                        chainConnections = newConns
+                                    }
+                                    false
+                                } else if (dismissValue == SwipeToDismissBoxValue.StartToEnd) {
+                                    editingChainNode = node
+                                    false
+                                } else false
+                            }
+                        )
+
+                        SwipeToDismissBox(
+                            state = dismissState,
+                            backgroundContent = {
+                                val direction = dismissState.dismissDirection
+                                val color = when {
+                                    direction == SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.secondaryContainer
+                                    direction == SwipeToDismissBoxValue.EndToStart && !isTrigger -> MaterialTheme.colorScheme.errorContainer
+                                    else -> Color.Transparent
+                                }
+                                val alignment = if (direction == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd
+                                val icon = if (direction == SwipeToDismissBoxValue.StartToEnd) Icons.Default.Edit else Icons.Default.Delete
+                                val text = if (direction == SwipeToDismissBoxValue.StartToEnd) "Edit" else "Delete"
+                                val tint = if (direction == SwipeToDismissBoxValue.StartToEnd) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer
+
+                                if (direction != SwipeToDismissBoxValue.EndToStart || !isTrigger) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(color, shape = RoundedCornerShape(16.dp))
+                                            .padding(horizontal = 24.dp),
+                                        contentAlignment = alignment
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(imageVector = icon, contentDescription = text, tint = tint, modifier = Modifier.size(18.dp))
+                                            Text(text = text, color = tint, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        }
                                     }
                                 }
-                                .clickable(enabled = !isTestingSheet, onClick = { editingChainNode = node }),
-                            colors = CardDefaults.outlinedCardColors(
-                                containerColor = if (isDragged) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface
-                            )
+                            }
                         ) {
-                            Row(
+                            OutlinedCard(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                    .then(dragModifier)
+                                    .onGloballyPositioned { layoutCoordinates ->
+                                        if (layoutCoordinates.size.height > 0) {
+                                            chainCardHeightPx = layoutCoordinates.size.height.toFloat()
+                                        }
+                                    }
+                                    .clickable(enabled = !isTestingSheet, onClick = { editingChainNode = node }),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.outlinedCardColors(
+                                    containerColor = if (isDragged) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface
+                                )
                             ) {
                                 Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    if (!isTrigger) {
-                                        Icon(
-                                            imageVector = Icons.Default.DragHandle,
-                                            contentDescription = "Drag to reorder",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier
-                                                .size(20.dp)
-                                                .pointerInput(index, chainNodes.size) {
-                                                    if (!isTestingSheet) {
-                                                        detectDragGesturesAfterLongPress(
-                                                            onDragStart = {
-                                                                draggedChainIndex = index
-                                                                dragChainOffsetY = 0f
-                                                            },
-                                                            onDrag = { change, dragAmount ->
-                                                                change.consume()
-                                                                dragChainOffsetY += dragAmount.y
-                                                                val curIdx = draggedChainIndex ?: return@detectDragGesturesAfterLongPress
-                                                                val threshold = (chainCardHeightPx * 0.5f).coerceAtLeast(40f)
-
-                                                                if (dragChainOffsetY > threshold && curIdx < chainNodes.size - 1) {
-                                                                    reorderChainNodes(curIdx, curIdx + 1)
-                                                                    draggedChainIndex = curIdx + 1
-                                                                    dragChainOffsetY -= chainCardHeightPx
-                                                                } else if (dragChainOffsetY < -threshold && curIdx > 1) {
-                                                                    reorderChainNodes(curIdx, curIdx - 1)
-                                                                    draggedChainIndex = curIdx - 1
-                                                                    dragChainOffsetY += chainCardHeightPx
-                                                                }
-                                                            },
-                                                            onDragEnd = {
-                                                                draggedChainIndex = null
-                                                                dragChainOffsetY = 0f
-                                                            },
-                                                            onDragCancel = {
-                                                                draggedChainIndex = null
-                                                                dragChainOffsetY = 0f
-                                                            }
-                                                        )
-                                                    }
-                                                }
-                                        )
-                                    }
-                                    Icon(
-                                        imageVector = WorkflowUiHelper.getNodeIcon(node.type),
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Column {
-                                        Text(
-                                            text = "${index + 1}. ${node.name}",
-                                            style = MaterialTheme.typography.titleSmall,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                        Text(
-                                            text = if (isTrigger) "Fixed Entry Point" else WorkflowUiHelper.getNodeTitle(node.type),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            fontSize = 10.sp
-                                        )
-                                    }
-                                }
-
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    IconButton(
-                                        onClick = { editingChainNode = node },
-                                        modifier = Modifier.size(28.dp),
-                                        enabled = !isTestingSheet
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.weight(1f)
                                     ) {
-                                        Icon(Icons.Default.Edit, contentDescription = "Edit", modifier = Modifier.size(15.dp))
-                                    }
-                                    if (!isTrigger) {
-                                        IconButton(
-                                            onClick = {
-                                                val newNodes = chainNodes.filterNot { it.id == node.id }
-                                                chainNodes = newNodes
-                                                val newConns = mutableListOf<WorkflowConnection>()
-                                                for (i in 0 until newNodes.size - 1) {
-                                                    newConns.add(WorkflowConnection(fromNodeId = newNodes[i].id, toNodeId = newNodes[i + 1].id))
-                                                }
-                                                chainConnections = newConns
-                                            },
-                                            modifier = Modifier.size(28.dp),
-                                            enabled = !isTestingSheet
-                                        ) {
-                                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(15.dp))
+                                        if (!isTrigger) {
+                                            Icon(
+                                                imageVector = Icons.Default.DragHandle,
+                                                contentDescription = "Drag to reorder",
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier
+                                                    .size(20.dp)
+                                                    .pointerInput(index, chainNodes.size) {
+                                                        if (!isTestingSheet) {
+                                                            detectDragGesturesAfterLongPress(
+                                                                onDragStart = {
+                                                                    draggedChainIndex = index
+                                                                    dragChainOffsetY = 0f
+                                                                },
+                                                                onDrag = { change, dragAmount ->
+                                                                    change.consume()
+                                                                    dragChainOffsetY += dragAmount.y
+                                                                    val curIdx = draggedChainIndex ?: return@detectDragGesturesAfterLongPress
+                                                                    val threshold = (chainCardHeightPx * 0.5f).coerceAtLeast(40f)
+
+                                                                    if (dragChainOffsetY > threshold && curIdx < chainNodes.size - 1) {
+                                                                        reorderChainNodes(curIdx, curIdx + 1)
+                                                                        draggedChainIndex = curIdx + 1
+                                                                        dragChainOffsetY -= chainCardHeightPx
+                                                                    } else if (dragChainOffsetY < -threshold && curIdx > 1) {
+                                                                        reorderChainNodes(curIdx, curIdx - 1)
+                                                                        draggedChainIndex = curIdx - 1
+                                                                        dragChainOffsetY += chainCardHeightPx
+                                                                    }
+                                                                },
+                                                                onDragEnd = {
+                                                                    draggedChainIndex = null
+                                                                    dragChainOffsetY = 0f
+                                                                },
+                                                                onDragCancel = {
+                                                                    draggedChainIndex = null
+                                                                    dragChainOffsetY = 0f
+                                                                }
+                                                            )
+                                                        }
+                                                    }
+                                            )
+                                        }
+                                        Icon(
+                                            imageVector = WorkflowUiHelper.getNodeIcon(node.type),
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Column {
+                                            Text(
+                                                text = "${index + 1}. ${node.name}",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Text(
+                                                text = if (isTrigger) "Fixed Entry Point" else WorkflowUiHelper.getNodeTitle(node.type),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontSize = 10.sp
+                                            )
                                         }
                                     }
                                 }
@@ -923,19 +861,7 @@ fun PreconditionEditorScreen(
                 }
             }
 
-            // Failure Policy Card
-            FailurePolicyCard(
-                onFailureAction = onFailureAction,
-                onFailureActionChanged = { onFailureAction = it },
-                maxRetries = maxRetries,
-                onMaxRetriesChanged = { maxRetries = it },
-                retryIntervalSeconds = retryIntervalSeconds,
-                onRetryIntervalSecondsChanged = { retryIntervalSeconds = it },
-                showNotificationOnFailure = showNotificationOnFailure,
-                onShowNotificationOnFailureChanged = { showNotificationOnFailure = it }
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(96.dp))
         }
     }
 
@@ -948,11 +874,107 @@ fun PreconditionEditorScreen(
         )
     }
 
+    if (showSaveConfirmDialog) {
+        val nameChanged = name != (precondition?.name ?: "")
+        val typeChanged = selectedType != (precondition?.type ?: PreconditionType.INTERNET_CHECK.name)
+        val enabledChanged = isEnabled != (precondition?.isEnabled ?: true)
+        val targetUrlChanged = targetUrl != (precondition?.targetUrl ?: "https://example.com/health")
+        val retryPolicyChanged = onFailureAction != (precondition?.onFailureAction ?: "FAIL_IMMEDIATELY") ||
+            maxRetries != (precondition?.maxRetries?.toString() ?: "3") ||
+            retryIntervalSeconds != (precondition?.retryIntervalSeconds?.toString() ?: "30") ||
+            showNotificationOnFailure != (precondition?.showNotificationOnFailure ?: false)
+        val originalChainIds = (precondition?.toDomain() as? Precondition.ChainCheck)?.nodes?.map { it.id }?.toSet() ?: emptySet()
+        val currentChainIds = chainNodes.map { it.id }.toSet()
+        val addedSteps = chainNodes.filter { !originalChainIds.contains(it.id) }
+        val removedSteps = (precondition?.toDomain() as? Precondition.ChainCheck)?.nodes?.filter { !currentChainIds.contains(it.id) } ?: emptyList()
+
+        AlertDialog(
+            onDismissRequest = { showSaveConfirmDialog = false },
+            title = { Text("Confirm Precondition Changes") },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Here is a summary of new changes to be saved:")
+                    if (nameChanged) {
+                        Text("• Name: '${precondition?.name ?: ""}' → '$name'", fontWeight = FontWeight.Bold)
+                    }
+                    if (typeChanged) {
+                        Text("• Type: ${precondition?.type ?: ""} → $selectedType", fontWeight = FontWeight.Bold)
+                    }
+                    if (enabledChanged) {
+                        Text("• Enabled: $isEnabled")
+                    }
+                    if (targetUrlChanged) {
+                        Text("• Target URL updated")
+                    }
+                    if (retryPolicyChanged) {
+                        Text("• Failure & Retry Policy updated:", fontWeight = FontWeight.Bold)
+                        Text("  - Action: $onFailureAction (was ${precondition?.onFailureAction ?: "FAIL_IMMEDIATELY"})")
+                        Text("  - Max Retries: $maxRetries (was ${precondition?.maxRetries ?: 3})")
+                        Text("  - Retry Interval: ${retryIntervalSeconds}s (was ${precondition?.retryIntervalSeconds ?: 30}s)")
+                        Text("  - Notification Alert: $showNotificationOnFailure (was ${precondition?.showNotificationOnFailure ?: false})")
+                    }
+                    if (addedSteps.isNotEmpty()) {
+                        Text("• Added Pipeline Steps (${addedSteps.size}):", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        addedSteps.forEach {
+                            Text("  + ${it.name} [${it.type.name}]", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                        }
+                    }
+                    if (removedSteps.isNotEmpty()) {
+                        Text("• Removed Pipeline Steps (${removedSteps.size}):", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+                        removedSteps.forEach {
+                            Text("  - ${it.name} [${it.type.name}]", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showSaveConfirmDialog = false
+                        val entity = (precondition ?: PreconditionEntity(
+                            id = UUID.randomUUID().toString(),
+                            name = name,
+                            type = selectedType
+                        )).copy(
+                            name = name,
+                            type = selectedType,
+                            isEnabled = isEnabled,
+                            targetUrl = targetUrl,
+                            method = method,
+                            headers = headers,
+                            expectedStatus = expectedStatus.toIntOrNull() ?: 200,
+                            requiredCarrier = requiredCarrier,
+                            credentialId = credentialId,
+                            pipelineJson = if (selectedType == PreconditionType.CHAINED_CHECK.name) pipelineJson else "",
+                            onFailureAction = onFailureAction,
+                            maxRetries = maxRetries.toIntOrNull() ?: 3,
+                            retryIntervalSeconds = retryIntervalSeconds.toIntOrNull() ?: 30,
+                            showNotificationOnFailure = showNotificationOnFailure,
+                            updatedAt = System.currentTimeMillis()
+                        )
+                        onSave(entity)
+                    }
+                ) {
+                    Text("Confirm & Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSaveConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     editingChainNode?.let { node ->
         NodeConfigBottomSheet(
             node = node,
             credentials = credentials,
             vaultPreconditions = emptyList(),
+            showPreconditionsGuard = false,
             onDismiss = { editingChainNode = null },
             onSave = { updated ->
                 chainNodes = chainNodes.map { if (it.id == updated.id) updated else it }
@@ -1005,6 +1027,72 @@ fun PreconditionEditorScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+fun FailurePolicyAccordion(
+    onFailureAction: String,
+    onFailureActionChanged: (String) -> Unit,
+    maxRetries: String,
+    onMaxRetriesChanged: (String) -> Unit,
+    retryIntervalSeconds: String,
+    onRetryIntervalSecondsChanged: (String) -> Unit,
+    showNotificationOnFailure: Boolean,
+    onShowNotificationOnFailureChanged: (Boolean) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    OutlinedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "🛡️ Failure & Retry Policy",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = if (expanded) "Configure retry attempts and failure response" else "Action: $onFailureAction • Retries: $maxRetries",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (expanded) "Collapse" else "Expand"
+                    )
+                }
+            }
+
+            if (expanded) {
+                Spacer(modifier = Modifier.height(4.dp))
+                FailurePolicyCard(
+                    onFailureAction = onFailureAction,
+                    onFailureActionChanged = onFailureActionChanged,
+                    maxRetries = maxRetries,
+                    onMaxRetriesChanged = onMaxRetriesChanged,
+                    retryIntervalSeconds = retryIntervalSeconds,
+                    onRetryIntervalSecondsChanged = onRetryIntervalSecondsChanged,
+                    showNotificationOnFailure = showNotificationOnFailure,
+                    onShowNotificationOnFailureChanged = onShowNotificationOnFailureChanged
+                )
+            }
+        }
     }
 }
 

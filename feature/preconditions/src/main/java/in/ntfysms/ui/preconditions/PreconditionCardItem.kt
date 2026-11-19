@@ -26,15 +26,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -74,9 +77,17 @@ import `in`.ntfysms.domain.engine.NodeExecutionStep
 import `in`.ntfysms.domain.engine.PreconditionResult
 import `in`.ntfysms.domain.model.PreconditionType
 import `in`.ntfysms.ui.workflows.NodeExecutionStepper
+import `in`.ntfysms.ui.workflows.WorkflowUiHelper
+
+private data class Quadruple<A, B, C, D>(
+    val first: A,
+    val second: B,
+    val third: C,
+    val fourth: D
+)
 
 /**
- * Modernized Card Item for a Precondition Rule in the Vault list.
+ * Compact Modernized Card Item for a Precondition Rule in the Vault list.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -89,7 +100,6 @@ fun PreconditionCardItem(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
     var isTesting by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<PreconditionResult?>(null) }
     var testSteps by remember { mutableStateOf<List<NodeExecutionStep>>(emptyList()) }
@@ -125,15 +135,8 @@ fun PreconditionCardItem(
         )
     }
 
-    val (iconEmoji, typeTitle) = when (precondition.type) {
-        PreconditionType.INTERNET_CHECK.name -> "🌐" to "Internet Check"
-        PreconditionType.VPN_CHECK.name -> "🔐" to "VPN Check"
-        PreconditionType.GPS_CHECK.name -> "📍" to "GPS Enabled Check"
-        PreconditionType.SIM_CHECK.name -> "📱" to "SIM Card Check"
-        PreconditionType.HEALTH_CHECK.name -> "🩺" to "HTTP Healthcheck"
-        PreconditionType.CHAINED_CHECK.name -> "⛓️" to "Chained Pipeline"
-        else -> "🛡️" to precondition.type
-    }
+    val iconVector = WorkflowUiHelper.getPreconditionIcon(precondition.type)
+    val typeTitle = WorkflowUiHelper.getPreconditionTitle(precondition.type)
 
     val containerColor by animateColorAsState(
         targetValue = if (precondition.isEnabled) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceContainerLow,
@@ -159,16 +162,16 @@ fun PreconditionCardItem(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(color, shape = RoundedCornerShape(16.dp))
-                    .padding(horizontal = 24.dp),
+                    .background(color, shape = RoundedCornerShape(14.dp))
+                    .padding(horizontal = 20.dp),
                 contentAlignment = alignment
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(imageVector = icon, contentDescription = text, tint = tint, modifier = Modifier.size(18.dp))
-                    Text(text = text, color = tint, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Icon(imageVector = icon, contentDescription = text, tint = tint, modifier = Modifier.size(16.dp))
+                    Text(text = text, color = tint, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 }
             }
         }
@@ -177,18 +180,18 @@ fun PreconditionCardItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable(onClick = onEdit),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.outlinedCardColors(
                 containerColor = containerColor
             )
         ) {
             Column(
                 modifier = Modifier
-                    .padding(16.dp)
-                    .animateContentSize(animationSpec = tween(250)),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                    .padding(12.dp)
+                    .animateContentSize(animationSpec = tween(220)),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // Header Row: Icon, Title, Verification Status Badge, Switch
+                // Header Row: Icon, Title, Status, Switch
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -196,16 +199,21 @@ fun PreconditionCardItem(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
                         Surface(
                             shape = CircleShape,
                             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
-                            modifier = Modifier.size(38.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Text(text = iconEmoji, fontSize = 18.sp)
+                                Icon(
+                                    imageVector = iconVector,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
                             }
                         }
 
@@ -216,34 +224,36 @@ fun PreconditionCardItem(
                             ) {
                                 Text(
                                     text = precondition.name,
-                                    style = MaterialTheme.typography.titleMedium,
+                                    style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.weight(1f, fill = false)
                                 )
 
-                                // Verification Status Pill in Header
                                 testResult?.let { res ->
-                                    val (badgeText, bg, fg) = when (res) {
-                                        is PreconditionResult.Passed -> Triple("✅ Verified", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
-                                        is PreconditionResult.Failed -> Triple("❌ Failed", MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
+                                    val (badgeText, badgeIcon, bg, fg) = when (res) {
+                                        is PreconditionResult.Passed -> Quadruple("OK", Icons.Default.CheckCircle, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+                                        is PreconditionResult.Failed -> Quadruple("Fail", Icons.Default.Error, MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.onErrorContainer)
                                     }
                                     SuggestionChip(
                                         onClick = { showTestStepperSheet = true },
                                         label = {
-                                            Text(
-                                                text = badgeText,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontSize = 9.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
+                                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                                Icon(imageVector = badgeIcon, contentDescription = null, modifier = Modifier.size(10.dp))
+                                                Text(
+                                                    text = badgeText,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
                                         },
                                         colors = SuggestionChipDefaults.suggestionChipColors(
                                             containerColor = bg,
                                             labelColor = fg
                                         ),
-                                        modifier = Modifier.height(22.dp)
+                                        modifier = Modifier.height(20.dp)
                                     )
                                 }
                             }
@@ -251,7 +261,8 @@ fun PreconditionCardItem(
                             Text(
                                 text = typeTitle,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 11.sp
                             )
                         }
                     }
@@ -260,34 +271,34 @@ fun PreconditionCardItem(
                         checked = precondition.isEnabled,
                         onCheckedChange = { targetEnabled ->
                             onToggle(targetEnabled)
-                        }
+                        },
+                        modifier = Modifier.height(28.dp)
                     )
                 }
 
-                // Healthcheck URL or details if present
                 if (precondition.type == PreconditionType.HEALTH_CHECK.name && precondition.targetUrl.isNotBlank()) {
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(6.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(
                             text = "${precondition.method} → ${precondition.targetUrl}",
                             fontFamily = FontFamily.Monospace,
                             style = MaterialTheme.typography.bodySmall,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
-                // Subtle Feature & Policy Indicator Badges
+                // Compact Metadata Badges
                 FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     val isRetry = precondition.onFailureAction.equals("RETRY", ignoreCase = true)
@@ -295,22 +306,18 @@ fun PreconditionCardItem(
                         Surface(
                             color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f),
                             contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
-                            shape = RoundedCornerShape(6.dp)
+                            shape = RoundedCornerShape(4.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = "Retry Policy",
-                                    modifier = Modifier.size(13.dp)
-                                )
+                                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(11.dp))
                                 Text(
                                     text = "${precondition.maxRetries}x • ${precondition.retryIntervalSeconds}s",
                                     style = MaterialTheme.typography.labelSmall,
-                                    fontSize = 11.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
@@ -321,104 +328,41 @@ fun PreconditionCardItem(
                         Surface(
                             color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
                             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                            shape = RoundedCornerShape(6.dp)
+                            shape = RoundedCornerShape(4.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Notifications,
-                                    contentDescription = "Notification Alert Enabled",
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Text(
-                                    text = "Alert",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
+                                Icon(Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(11.dp))
+                                Text("Alert", style = MaterialTheme.typography.labelSmall, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
 
-                    // Linked Workflows Indicator Badge
                     Surface(
                         color = if (linkedWorkflowCount > 0) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f) else MaterialTheme.colorScheme.surfaceContainerLow,
                         contentColor = if (linkedWorkflowCount > 0) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                        shape = RoundedCornerShape(6.dp)
+                        shape = RoundedCornerShape(4.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Link,
-                                contentDescription = "Linked Workflows",
-                                modifier = Modifier.size(13.dp)
-                            )
+                            Icon(Icons.Default.Link, contentDescription = null, modifier = Modifier.size(11.dp))
                             Text(
-                                text = if (linkedWorkflowCount > 0) "$linkedWorkflowCount Workflow${if (linkedWorkflowCount > 1) "s" else ""}" else "Unlinked",
+                                text = if (linkedWorkflowCount > 0) "$linkedWorkflowCount Wf" else "Unlinked",
                                 style = MaterialTheme.typography.labelSmall,
-                                fontSize = 11.sp,
+                                fontSize = 10.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
                     }
-
-                    Surface(
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        shape = RoundedCornerShape(6.dp)
-                    ) {
-                        Text(
-                            text = "#${precondition.id.take(6)}",
-                            fontFamily = FontFamily.Monospace,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontSize = 10.sp,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
-                        )
-                    }
                 }
 
-                // Permission Warning Banner if test failed due to permission
-                testResult?.let { result ->
-                    val targetPermissionToRequest = when {
-                        precondition.type == PreconditionType.GPS_CHECK.name && result is PreconditionResult.Failed && result.reason.contains("Missing", ignoreCase = true) -> "android.permission.ACCESS_FINE_LOCATION"
-                        precondition.type == PreconditionType.SIM_CHECK.name && result is PreconditionResult.Failed && result.reason.contains("Missing", ignoreCase = true) -> "android.permission.READ_PHONE_STATE"
-                        else -> null
-                    }
-
-                    if (result is PreconditionResult.Failed && targetPermissionToRequest != null) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.errorContainer,
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(10.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "⚠️ Permission Required",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                                Button(
-                                    onClick = { permissionLauncher.launch(targetPermissionToRequest) }
-                                ) {
-                                    Text("Grant Permission", fontSize = 11.sp)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Action Bar: Test Button, Edit Icon Button & Overflow Menu
+                // Bottom Action Bar: Test Button & Menu
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -439,42 +383,50 @@ fun PreconditionCardItem(
                                 }
                             )
                         },
-                        enabled = !isTesting
+                        enabled = !isTesting,
+                        modifier = Modifier.height(26.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
                     ) {
                         if (isTesting) {
                             CircularProgressIndicator(
-                                modifier = Modifier.height(16.dp).width(16.dp),
+                                modifier = Modifier.size(12.dp),
                                 strokeWidth = 2.dp
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Testing...", fontSize = 12.sp)
-                        } else {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Test", fontSize = 12.sp)
+                            Text("Testing...", fontSize = 11.sp)
+                        } else {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(13.dp))
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text("Test", fontSize = 11.sp)
                         }
                     }
 
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(0.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = onEdit) {
+                        IconButton(
+                            onClick = onEdit,
+                            modifier = Modifier.size(28.dp)
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.Edit,
-                                contentDescription = "Edit Precondition",
+                                contentDescription = "Edit",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
 
                         Box {
-                            IconButton(onClick = { showOverflowMenu = true }) {
+                            IconButton(
+                                onClick = { showOverflowMenu = true },
+                                modifier = Modifier.size(28.dp)
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.MoreVert,
-                                    contentDescription = "More Options",
+                                    contentDescription = "More",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
 
@@ -483,13 +435,9 @@ fun PreconditionCardItem(
                                 onDismissRequest = { showOverflowMenu = false }
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("View Stepper History") },
+                                    text = { Text("View History") },
                                     leadingIcon = {
-                                        Icon(
-                                            Icons.Default.History,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
+                                        Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(16.dp))
                                     },
                                     enabled = testSteps.isNotEmpty(),
                                     onClick = {
@@ -501,12 +449,7 @@ fun PreconditionCardItem(
                                 DropdownMenuItem(
                                     text = { Text("Delete Rule", color = MaterialTheme.colorScheme.error) },
                                     leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Delete,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.size(18.dp)
-                                        )
+                                        Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                                     },
                                     onClick = {
                                         showOverflowMenu = false
@@ -531,9 +474,6 @@ fun PreconditionCardItem(
     }
 }
 
-/**
- * Execution Stepper Bottom Sheet for Precondition rules, matching Workflow executions.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PreconditionExecutionStepperBottomSheet(
