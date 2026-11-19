@@ -58,7 +58,7 @@ class DefaultWorkflowInitializer(
             isEnabled = true,
             configJson = JSONObject().apply {
                 put("serverUrl", "https://ntfy.sh")
-                put("topic", "ntfysms-topic-" + UUID.randomUUID().toString().take(6))
+                put("topic", "zophop-topic-" + UUID.randomUUID().toString().take(6))
                 put("priority", "3")
                 put("tags", "otp,sms")
             }.toString()

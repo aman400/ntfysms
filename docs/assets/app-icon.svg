@@ -2,50 +2,38 @@
   <defs>
     <!-- Background Gradient -->
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1E1B4B" />
-      <stop offset="60%" stop-color="#312E81" />
-      <stop offset="100%" stop-color="#4338CA" />
+      <stop offset="0%" stop-color="#0F172A" />
+      <stop offset="50%" stop-color="#1E1B4B" />
+      <stop offset="100%" stop-color="#3730A3" />
     </linearGradient>
 
-    <!-- Radial Glow -->
-    <radialGradient id="glowGrad" cx="50%" cy="48%" r="26%">
-      <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.25" />
-      <stop offset="100%" stop-color="#38BDF8" stop-opacity="0" />
-    </radialGradient>
-
-    <!-- Rocket Gradient -->
-    <linearGradient id="rocketGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <!-- Z Emblem Gradient -->
+    <linearGradient id="zGrad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#38BDF8" />
-      <stop offset="100%" stop-color="#06B6D4" />
+      <stop offset="50%" stop-color="#818CF8" />
+      <stop offset="100%" stop-color="#C084FC" />
+    </linearGradient>
+
+    <!-- Hop Arrow Arc Gradient -->
+    <linearGradient id="arcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#F472B6" />
     </linearGradient>
   </defs>
 
   <!-- Background Base -->
   <rect width="108" height="108" rx="24" fill="url(#bgGrad)" />
 
-  <!-- Geometric Concentric Circles -->
+  <!-- Concentric Rings -->
   <circle cx="54" cy="54" r="42" fill="none" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="1" />
-  <circle cx="54" cy="54" r="32" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="1" />
 
-  <!-- Radial Glow -->
-  <circle cx="54" cy="52" r="26" fill="url(#glowGrad)" />
+  <!-- ZopHop "Z" Emblem -->
+  <path fill="url(#zGrad)" d="M34,36 L74,36 C77,36 78,39 76,41 L40,70 L74,70 C76,70 78,72 78,74 L78,74 C78,76 76,78 74,78 L34,78 C31,78 30,75 32,73 L68,44 L34,44 C32,44 30,42 30,40 L30,40 C30,38 32,36 34,36 Z" />
 
-  <!-- SMS Speech Bubble -->
-  <path fill="#FFFFFF" d="M32,38 C32,33.58 35.58,30 40,30 L66,30 C70.42,30 74,33.58 74,38 L74,56 C74,60.42 70.42,64 66,64 L44,64 L35,72 L36.5,64 L40,64 C35.58,64 32,60.42 32,56 Z" />
+  <!-- Forward Hop Arc Arrow -->
+  <path fill="none" stroke="url(#arcGrad)" stroke-width="3.5" stroke-linecap="round" d="M38,30 C48,22 60,22 70,30" />
 
-  <!-- Message Content Lines -->
-  <rect x="40" y="40" width="14" height="3" rx="1.5" fill="#4F46E5" />
-  <rect x="40" y="47" width="22" height="3" rx="1.5" fill="#818CF8" />
-
-  <!-- 4 OTP Pin Code Dots -->
-  <circle cx="40" cy="55" r="1.5" fill="#4F46E5" />
-  <circle cx="46" cy="55" r="1.5" fill="#4F46E5" />
-  <circle cx="52" cy="55" r="1.5" fill="#4F46E5" />
-  <circle cx="58" cy="55" r="1.5" fill="#4F46E5" />
-
-  <!-- Forwarding Rocket Badge -->
-  <path fill="url(#rocketGrad)" d="M60,26 L78,34 L68,50 L64,42 L56,38 Z" />
-
-  <!-- Inner Arrow Highlight -->
-  <path fill="#FFFFFF" d="M65,33 L73,36.5 L69,43.5 L67,39.5 L63,38 Z" />
+  <!-- Node Dots -->
+  <circle cx="34" cy="36" r="3.5" fill="#38BDF8" />
+  <circle cx="74" cy="78" r="3.5" fill="#C084FC" />
 </svg>

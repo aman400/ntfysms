@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NtfySMS — Personal OTP SMS & Push Notification Forwarder</title>
-  <meta name="description" content="NtfySMS is an open-source Android app to forward incoming OTP SMS and notifications to ntfy or Gotify servers with write-only topic permissions, VPN pre-checks, and regex parsing.">
+  <title>ZopHop — Personal OTP SMS & Push Notification Forwarder</title>
+  <meta name="description" content="ZopHop is an open-source Android app to forward incoming OTP SMS and notifications to ntfy or Gotify servers with write-only topic permissions, VPN pre-checks, and regex parsing.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -484,8 +484,8 @@
   <header>
     <div class="container nav">
       <a href="#" class="logo">
-        <img src="assets/app-icon.svg" alt="NtfySMS App Icon" width="32" height="32" style="border-radius: 8px;">
-        <span class="logo-title">NtfySMS</span>
+        <img src="assets/app-icon.svg" alt="ZopHop App Icon" width="32" height="32" style="border-radius: 8px;">
+        <span class="logo-title">ZopHop</span>
       </a>
       <div class="nav-links">
         <a href="#quickstart" class="nav-link">Quick Start</a>
@@ -502,7 +502,7 @@
   <section class="hero">
     <div class="container">
       <div class="hero-brand">
-        <img src="assets/app-icon.svg" alt="NtfySMS App Icon" class="hero-icon">
+        <img src="assets/app-icon.svg" alt="ZopHop App Icon" class="hero-icon">
         <div class="hero-badge">🚀 Open Source Android Application — Version 1.0.0</div>
       </div>
       <h1 class="hero-title">Forward OTP SMS & Notifications to ntfy & Gotify</h1>
@@ -581,7 +581,7 @@
         <!-- Section 1: Overview -->
         <section class="doc-card" id="overview">
           <h2>📱 1. Overview & Flow Architecture</h2>
-          <p>NtfySMS captures incoming OTP SMS messages (and optional app notifications), extracts verification codes using regex, and forwards them to ntfy or Gotify target servers.</p>
+          <p>ZopHop captures incoming OTP SMS messages (and optional app notifications), extracts verification codes using regex, and forwards them to ntfy or Gotify target servers.</p>
 
           <div class="grid">
             <div class="grid-card">
@@ -591,7 +591,7 @@
 
             <div class="grid-card">
               <h4>🔒 Write-Only ACL Topics</h4>
-              <p>Grant NtfySMS write-only access to post OTPs (`otp-*`), while receiver apps use read-only tokens.</p>
+              <p>Grant ZopHop write-only access to post OTPs (`otp-*`), while receiver apps use read-only tokens.</p>
             </div>
 
             <div class="grid-card">
@@ -609,7 +609,7 @@
         <!-- Section 2: Quick Start -->
         <section class="doc-card" id="quickstart">
           <h2>⚡ 2. First-Time App Quick Start</h2>
-          <p>Follow these 4 simple steps to set up NtfySMS on your phone:</p>
+          <p>Follow these 4 simple steps to set up ZopHop on your phone:</p>
 
           <div class="callout callout-warning">
             <strong>⚠️ Play Protect Note:</strong> When sideloading, Google Play Protect may show a *"Blocked by Play Protect"* warning. Tap <strong>"More details"</strong> → <strong>"Install anyway"</strong>.
@@ -618,7 +618,7 @@
           <div class="grid">
             <div class="grid-card">
               <h4>1. Install & Grant Permissions</h4>
-              <p>Sideload <code>NtfySMS-v1.0.0.apk</code> → Open <strong>Settings</strong> → Grant <strong>SMS Permission</strong>, <strong>Notification Permission</strong>, and <strong>Battery Exemption</strong>.</p>
+              <p>Sideload <code>ZopHop-v1.0.0.apk</code> → Open <strong>Settings</strong> → Grant <strong>SMS Permission</strong>, <strong>Notification Permission</strong>, and <strong>Battery Exemption</strong>.</p>
             </div>
 
             <div class="grid-card">
@@ -633,7 +633,7 @@
 
             <div class="grid-card">
               <h4>4. Activate Forwarding</h4>
-              <p>Toggle top app bar switch to <strong>ACTIVE</strong>. Status notification will show <code>🟢 NtfySMS Active</code>.</p>
+              <p>Toggle top app bar switch to <strong>ACTIVE</strong>. Status notification will show <code>🟢 ZopHop Active</code>.</p>
             </div>
           </div>
         </section>
@@ -641,7 +641,7 @@
         <!-- Section 3: ntfy Setup -->
         <section class="doc-card" id="ntfy-setup">
           <h2>🚀 3. ntfy Server & Write-Only ACL Setup</h2>
-          <p>Deploy ntfy (Official Repo: <a href="https://github.com/binwiederhier/ntfy" target="_blank" style="color: var(--teal);">binwiederhier/ntfy</a>) with Docker Compose and configure topic access control lists (ACL) so NtfySMS cannot read messages, and receivers cannot post messages.</p>
+          <p>Deploy ntfy (Official Repo: <a href="https://github.com/binwiederhier/ntfy" target="_blank" style="color: var(--teal);">binwiederhier/ntfy</a>) with Docker Compose and configure topic access control lists (ACL) so ZopHop cannot read messages, and receivers cannot post messages.</p>
 
           <h3>1. ntfy Docker Compose (`docker-compose.yml`)</h3>
           <div class="code-box">
@@ -677,17 +677,17 @@ enable-metrics: false</div>
           <div class="code-box">
             <div class="code-box-header">ACL Commands</div>
             <div class="code-box-content"># Create separate user accounts
-ntfy user add ntfysms_publisher
+ntfy user add zophop_publisher
 ntfy user add ntfy_receiver
 
-# Grant WRITE-ONLY permission on otp-* topics to NtfySMS app
-ntfy access ntfysms_publisher "otp-*" write-only
+# Grant WRITE-ONLY permission on otp-* topics to ZopHop app
+ntfy access zophop_publisher "otp-*" write-only
 
 # Grant READ-ONLY permission on otp-* topics to Receiver App
 ntfy access ntfy_receiver "otp-*" read-only
 
-# Generate Access Token for NtfySMS
-ntfy token add ntfysms_publisher</div>
+# Generate Access Token for ZopHop
+ntfy token add zophop_publisher</div>
           </div>
         </section>
 
@@ -716,7 +716,7 @@ services:
           </div>
 
           <div class="callout callout-info">
-            <strong>Gotify Token Creation:</strong> Log in to Gotify Web UI (`http://192.168.1.50:8081`) → Apps → <strong>Create Application</strong> (Name: NtfySMS) → Copy generated token (`A1b2C3d4E5f6`) and paste into NtfySMS App Token field.
+            <strong>Gotify Token Creation:</strong> Log in to Gotify Web UI (`http://192.168.1.50:8081`) → Apps → <strong>Create Application</strong> (Name: ZopHop) → Copy generated token (`A1b2C3d4E5f6`) and paste into ZopHop App Token field.
           </div>
         </section>
 
@@ -800,18 +800,18 @@ services:
         <!-- Section 7: OEM Battery -->
         <section class="doc-card" id="oem">
           <h2>📱 7. OEM Background Activity Settings</h2>
-          <p>Prevent aggressive OEM background killers from closing NtfySMS when screen turns off:</p>
+          <p>Prevent aggressive OEM background killers from closing ZopHop when screen turns off:</p>
 
           <div class="callout callout-warning">
-            <strong>Xiaomi / POCO (MIUI / HyperOS):</strong> Security App → Permissions → Autostart → Enable NtfySMS. App Info → Battery Saver → Select <em>No Restrictions</em>. Lock card in Recent Apps 🔒.
+            <strong>Xiaomi / POCO (MIUI / HyperOS):</strong> Security App → Permissions → Autostart → Enable ZopHop. App Info → Battery Saver → Select <em>No Restrictions</em>. Lock card in Recent Apps 🔒.
           </div>
 
           <div class="callout callout-warning">
-            <strong>Samsung (One UI):</strong> Settings → Battery → Background Usage Limits → Never Sleeping Apps → Add NtfySMS.
+            <strong>Samsung (One UI):</strong> Settings → Battery → Background Usage Limits → Never Sleeping Apps → Add ZopHop.
           </div>
 
           <div class="callout callout-warning">
-            <strong>OnePlus / Oppo / Realme:</strong> Settings → App Management → NtfySMS → Battery Usage → Enable <em>Allow Background Activity</em> & <em>Auto Launch</em>.
+            <strong>OnePlus / Oppo / Realme:</strong> Settings → App Management → ZopHop → Battery Usage → Enable <em>Allow Background Activity</em> & <em>Auto Launch</em>.
           </div>
         </section>
 
@@ -834,7 +834,7 @@ services:
   <!-- Footer -->
   <footer>
     <div class="container">
-      <p>NtfySMS — Open Source Android Application built in Kotlin. Released under MIT License.</p>
+      <p>ZopHop — Open Source Android Application built in Kotlin. Released under MIT License.</p>
       <p style="margin-top: 6px;">
         <a href="https://github.com/aman400/ntfysms" target="_blank">GitHub Repository</a> •
         <a href="https://github.com/aman400/ntfysms/releases" target="_blank">Releases</a> •
