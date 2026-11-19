@@ -3,37 +3,49 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>NtfySMS — Personal OTP SMS & Push Notification Forwarder</title>
-  <meta name="description" content="NtfySMS is an open-source Android app to forward incoming OTP SMS and notifications to ntfy or Gotify servers with write-only topic permissions, VPN pre-checks, and regex parsing.">
+  <title>ZopHop — Visual Workflow & OTP Forwarding Automation for Android</title>
+  <meta name="description" content="ZopHop is an open-source Android application to capture OTP SMS and notifications, run visual workflow node graphs, evaluate preconditions, and forward alerts to ntfy, Gotify, and custom webhooks.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="assets/app-icon.svg">
   <style>
     :root {
-      --bg: #0b0f19;
-      --bg-aura: radial-gradient(circle at 50% 0%, rgba(129, 140, 248, 0.12) 0%, rgba(52, 211, 153, 0.06) 50%, transparent 80%);
-      --surface: rgba(17, 24, 39, 0.65);
-      --surface-card: #111827;
-      --surface-border: rgba(199, 210, 254, 0.08);
-      --surface-border-hover: rgba(129, 140, 248, 0.35);
-      --primary: #34d399;
+      /* App Theme Palette: Emerald (Primary) & Amber (Secondary) & Deep Slate Dark */
+      --bg: #090d16;
+      --bg-aura: radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.15) 0%, rgba(245, 158, 11, 0.08) 50%, transparent 85%);
+      --surface: #111827;
+      --surface-card: #1f2937;
+      --surface-border: rgba(16, 185, 129, 0.18);
+      --surface-border-hover: rgba(16, 185, 129, 0.45);
+
+      --primary: #10b981;
       --primary-dark: #059669;
-      --indigo: #818cf8;
-      --indigo-light: #c7d2fe;
-      --teal: #38bdf8;
-      --amber: #fde68a;
+      --primary-container: #064e3b;
+      --primary-light: #d1fae5;
+
+      --secondary: #f59e0b;
+      --secondary-dark: #d97706;
+      --secondary-container: #78350f;
+      --secondary-light: #fef3c7;
+
       --text: #f8fafc;
-      --text-muted: #94a3b8;
+      --text-muted: #9ca3af;
       --text-dim: #64748b;
+
+      --success: #34d399;
+      --error: #fca5a5;
+      --warning: #fbbf24;
+
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', Consolas, monospace;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     html { scroll-behavior: smooth; }
 
     body {
-      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: var(--font-sans);
       background-color: var(--bg);
       background-image: var(--bg-aura);
       background-attachment: fixed;
@@ -54,7 +66,7 @@
       position: sticky;
       top: 0;
       z-index: 1000;
-      background: rgba(11, 15, 25, 0.85);
+      background: rgba(9, 13, 22, 0.88);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       border-bottom: 1px solid var(--surface-border);
@@ -68,828 +80,725 @@
     .logo {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
       text-decoration: none;
       color: #fff;
     }
+    .logo-img {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+    }
     .logo-title {
-      font-weight: 700;
-      font-size: 1.15rem;
-      letter-spacing: -0.3px;
+      font-weight: 800;
+      font-size: 1.25rem;
+      letter-spacing: -0.4px;
+      background: linear-gradient(135deg, #ffffff 0%, var(--primary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
     .nav-links {
       display: flex;
-      gap: 20px;
+      gap: 22px;
       align-items: center;
     }
     .nav-link {
       color: var(--text-muted);
       text-decoration: none;
       font-weight: 600;
-      font-size: 0.88rem;
+      font-size: 0.9rem;
       transition: color 0.2s;
     }
-    .nav-link:hover { color: #fff; }
-
-    /* Hero Section */
-    .hero {
-      padding: 70px 0 40px 0;
-      text-align: center;
-    }
-    /* Hero Brand & Icon */
-    .hero-brand {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-    .hero-icon {
-      width: 88px;
-      height: 88px;
-      border-radius: 20px;
-      box-shadow: 0 0 35px rgba(129, 140, 248, 0.3), 0 0 10px rgba(52, 211, 153, 0.2);
-      border: 1px solid var(--surface-border);
-      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    .hero-icon:hover {
-      transform: scale(1.06) rotate(-2deg);
-    }
-
-    .hero-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 5px 14px;
-      background: rgba(129, 140, 248, 0.1);
-      border: 1px solid rgba(129, 140, 248, 0.25);
-      border-radius: 20px;
-      color: var(--indigo-light);
-      font-size: 0.82rem;
-      font-weight: 700;
-      margin-bottom: 0;
-    }
-    .hero-title {
-      font-size: 3.25rem;
-      font-weight: 800;
-      line-height: 1.15;
-      letter-spacing: -1.5px;
-      margin-bottom: 20px;
-      color: #fff;
-    }
-    .hero-subtitle {
-      font-size: 1.15rem;
-      color: var(--text-muted);
-      max-width: 720px;
-      margin: 0 auto 36px auto;
-      font-weight: 400;
-    }
-    .hero-actions {
-      display: flex;
-      justify-content: center;
-      gap: 14px;
-      flex-wrap: wrap;
-    }
+    .nav-link:hover { color: var(--primary); }
 
     /* Buttons */
     .btn {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 12px 24px;
+      padding: 10px 20px;
       border-radius: 10px;
       font-weight: 700;
-      font-size: 0.92rem;
+      font-size: 0.9rem;
       text-decoration: none;
       transition: all 0.2s ease;
       cursor: pointer;
+      border: 1px solid transparent;
     }
     .btn-primary {
-      background: var(--primary);
-      color: #042f2e;
-      box-shadow: 0 4px 16px rgba(52, 211, 153, 0.2);
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: #022c22;
+      box-shadow: 0 4px 20px rgba(16, 185, 129, 0.25);
     }
     .btn-primary:hover {
-      background: var(--primary-dark);
-      color: #fff;
-      transform: translateY(-1px);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 24px rgba(16, 185, 129, 0.4);
     }
     .btn-secondary {
       background: var(--surface-card);
-      color: #fff;
-      border: 1px solid var(--surface-border);
+      color: var(--text);
+      border-color: var(--surface-border);
     }
     .btn-secondary:hover {
-      border-color: var(--indigo);
-      transform: translateY(-1px);
+      background: var(--surface-border-hover);
+      color: #fff;
+    }
+    .btn-amber {
+      background: linear-gradient(135deg, var(--secondary) 0%, var(--secondary-dark) 100%);
+      color: #451a03;
     }
 
-    /* Pipeline Showcase Box */
-    .pipeline-box {
-      margin: 45px auto 0 auto;
+    /* Hero Section */
+    .hero {
+      padding: 70px 0 50px 0;
+      text-align: center;
+    }
+    .hero-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      padding: 6px 16px;
+      border-radius: 30px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 24px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .hero-title {
+      font-size: 2.8rem;
+      font-weight: 800;
+      line-height: 1.15;
+      letter-spacing: -1px;
+      margin-bottom: 20px;
+      max-width: 900px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .hero-title span {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .hero-subtitle {
+      font-size: 1.12rem;
+      color: var(--text-muted);
+      max-width: 760px;
+      margin: 0 auto 36px auto;
+    }
+    .hero-actions {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* Badge Bar */
+    .badge-bar {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-top: 40px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .badge-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface);
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: 1px solid var(--surface-border);
+    }
+
+    /* SVG Architecture Visualizer */
+    .arch-card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 16px;
+      padding: 24px;
+      margin: 50px 0;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+    .arch-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+    .arch-title {
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: var(--text);
+    }
+    .arch-svg-container {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    /* Section Component Styling */
+    section { padding: 60px 0; }
+    .section-tag {
+      color: var(--secondary);
+      font-weight: 700;
+      font-size: 0.82rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+      display: block;
+    }
+    .section-title {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 16px;
+    }
+    .section-subtitle {
+      color: var(--text-muted);
+      font-size: 1.05rem;
+      max-width: 680px;
+      margin-bottom: 40px;
+    }
+
+    /* Grid Layouts */
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+      gap: 24px;
+    }
+
+    /* Cards */
+    .card {
       background: var(--surface);
       border: 1px solid var(--surface-border);
       border-radius: 16px;
       padding: 28px;
-      backdrop-filter: blur(12px);
+      transition: all 0.3s ease;
+      position: relative;
     }
-    .pipeline-title {
-      font-size: 0.8rem;
-      font-weight: 700;
-      color: var(--text-dim);
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 20px;
-      display: flex;
-      justify-content: space-between;
+    .card:hover {
+      border-color: var(--surface-border-hover);
+      transform: translateY(-4px);
+      box-shadow: 0 12px 30px rgba(16, 185, 129, 0.12);
     }
-    .pipeline-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
-      align-items: center;
-    }
-    .pipeline-card {
-      background: #0b0f19;
-      border: 1px solid var(--surface-border);
-      border-radius: 10px;
-      padding: 16px;
-      text-align: left;
-    }
-    .pipeline-card-title {
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: var(--indigo-light);
-      margin-bottom: 4px;
-    }
-    .pipeline-card-desc {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.78rem;
-      color: var(--text-muted);
-    }
-    .pipeline-arrow {
-      font-size: 1.25rem;
-      color: var(--primary);
-      font-weight: 700;
-      text-align: center;
-    }
-
-    /* 2-Column Workspace */
-    .workspace {
-      display: grid;
-      grid-template-columns: 260px 1fr;
-      gap: 36px;
-      padding: 50px 0;
-      align-items: start;
-    }
-
-    /* Subtle Sticky Sidebar */
-    .sidebar {
-      position: sticky;
-      top: 88px;
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
+    .card-icon {
+      width: 48px;
+      height: 48px;
       border-radius: 12px;
-      padding: 20px;
-      backdrop-filter: blur(12px);
-      max-height: calc(100vh - 110px);
-      overflow-y: auto;
-    }
-    .sidebar-group-title {
-      font-size: 0.72rem;
-      font-weight: 800;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: var(--text-dim);
-      margin: 14px 0 6px 0;
-    }
-    .sidebar-group-title:first-child { margin-top: 0; }
-    .sidebar-menu {
-      list-style: none;
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--primary);
       display: flex;
-      flex-direction: column;
-      gap: 2px;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      margin-bottom: 20px;
     }
-    .sidebar-link {
-      color: var(--text-muted);
-      text-decoration: none;
-      font-size: 0.85rem;
-      font-weight: 600;
-      padding: 7px 10px;
-      border-radius: 6px;
-      display: block;
-      transition: all 0.15s;
+    .card-icon.amber {
+      background: rgba(245, 158, 11, 0.12);
+      color: var(--secondary);
     }
-    .sidebar-link:hover, .sidebar-link.active {
-      color: #fff;
-      background: rgba(129, 140, 248, 0.12);
-      border-left: 2px solid var(--indigo);
-    }
-
-    /* Main Content Sections */
-    .content-area { min-width: 0; }
-
-    .doc-card {
-      background: var(--surface);
-      border: 1px solid var(--surface-border);
-      border-radius: 14px;
-      padding: 32px;
-      margin-bottom: 28px;
-      backdrop-filter: blur(12px);
-    }
-    .doc-card h2 {
-      font-size: 1.6rem;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      color: #fff;
-      margin-bottom: 16px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid var(--surface-border);
-    }
-    .doc-card h3 {
-      font-size: 1.15rem;
+    .card-title {
+      font-size: 1.2rem;
       font-weight: 700;
-      color: var(--indigo-light);
-      margin: 20px 0 10px 0;
+      margin-bottom: 10px;
     }
-    .doc-card p {
+    .card-text {
       color: var(--text-muted);
-      margin-bottom: 14px;
       font-size: 0.95rem;
-    }
-
-    /* Soothing Callout Boxes */
-    .callout {
-      padding: 16px 20px;
-      border-radius: 10px;
-      margin: 18px 0;
-      font-size: 0.9rem;
-      border-left: 3px solid;
-    }
-    .callout-warning {
-      background: rgba(253, 230, 138, 0.08);
-      border-color: var(--amber);
-      color: #fef3c7;
-    }
-    .callout-info {
-      background: rgba(129, 140, 248, 0.08);
-      border-color: var(--indigo);
-      color: #e0e7ff;
+      line-height: 1.6;
     }
 
     /* Code Blocks */
     .code-box {
-      background: #070a12;
+      background: #060911;
       border: 1px solid var(--surface-border);
-      border-radius: 10px;
-      overflow: hidden;
-      margin: 14px 0;
-    }
-    .code-box-header {
-      background: #111827;
-      padding: 8px 14px;
-      font-size: 0.78rem;
-      font-weight: 700;
-      color: var(--text-dim);
-      border-bottom: 1px solid var(--surface-border);
-    }
-    .code-box-content {
-      padding: 16px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.85rem;
-      color: var(--teal);
-      overflow-x: auto;
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-
-    /* Cards Grid */
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 16px;
-      margin-top: 16px;
-    }
-    .grid-card {
-      background: #070a12;
-      border: 1px solid var(--surface-border);
-      border-radius: 10px;
-      padding: 20px;
-      transition: border-color 0.2s;
-    }
-    .grid-card:hover {
-      border-color: var(--surface-border-hover);
-    }
-    .grid-card h4 {
-      font-size: 1rem;
-      font-weight: 700;
-      color: #fff;
-      margin-bottom: 6px;
-    }
-    .grid-card p {
+      border-radius: 12px;
+      padding: 18px;
+      font-family: var(--font-mono);
       font-size: 0.88rem;
-      color: var(--text-muted);
-      margin-bottom: 0;
-    }
-
-    /* Table Styling */
-    .table-box {
+      color: var(--primary-light);
       overflow-x: auto;
       margin: 16px 0;
+      position: relative;
+    }
+    .code-label {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      font-size: 0.72rem;
+      font-family: var(--font-sans);
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+
+    /* Tables */
+    .table-container {
+      overflow-x: auto;
+      border-radius: 12px;
+      border: 1px solid var(--surface-border);
+      margin: 20px 0;
     }
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.88rem;
+      background: var(--surface);
       text-align: left;
+      font-size: 0.9rem;
     }
     th {
-      background: #111827;
-      padding: 10px 14px;
+      background: var(--surface-card);
+      padding: 14px 18px;
       font-weight: 700;
-      color: #fff;
+      color: var(--text);
       border-bottom: 1px solid var(--surface-border);
     }
     td {
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--surface-border);
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
       color: var(--text-muted);
+    }
+    tr:last-child td { border-bottom: none; }
+    td code {
+      font-family: var(--font-mono);
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--primary);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.82rem;
     }
 
-    /* Tabbed Interactive Box */
-    .tab-wrapper {
-      background: #070a12;
-      border: 1px solid var(--surface-border);
-      border-radius: 10px;
-      overflow: hidden;
-      margin: 20px 0;
-    }
-    .tab-header {
+    /* Accordion & Tabs for Troubleshooting */
+    .tab-nav {
       display: flex;
-      background: #111827;
-      border-bottom: 1px solid var(--surface-border);
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
     }
     .tab-btn {
-      padding: 12px 20px;
-      background: transparent;
-      border: none;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
       color: var(--text-muted);
-      font-weight: 700;
-      font-size: 0.82rem;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-weight: 600;
       cursor: pointer;
-      border-bottom: 2px solid transparent;
-      transition: all 0.15s;
+      font-family: var(--font-sans);
+      transition: all 0.2s;
     }
-    .tab-btn.active {
-      color: var(--indigo-light);
-      border-bottom-color: var(--indigo);
-      background: rgba(129, 140, 248, 0.08);
+    .tab-btn.active, .tab-btn:hover {
+      background: var(--primary-container);
+      color: var(--primary-light);
+      border-color: var(--primary);
     }
-    .tab-body {
-      padding: 20px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.85rem;
-      color: var(--teal);
-      white-space: pre-wrap;
-      word-break: break-all;
+
+    /* Alerts */
+    .alert {
+      padding: 16px 20px;
+      border-radius: 12px;
+      margin: 16px 0;
+      display: flex;
+      gap: 14px;
+      font-size: 0.92rem;
+      line-height: 1.5;
     }
+    .alert-note { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--primary-light); }
+    .alert-amber { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: var(--secondary-light); }
 
     /* Footer */
     footer {
-      padding: 50px 0 30px 0;
       border-top: 1px solid var(--surface-border);
-      text-align: center;
+      padding: 50px 0;
+      margin-top: 80px;
       color: var(--text-dim);
-      font-size: 0.88rem;
+      font-size: 0.9rem;
     }
-    footer a {
-      color: var(--indigo-light);
-      text-decoration: none;
-      font-weight: 600;
+    .footer-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 20px;
     }
 
-    @media (max-width: 868px) {
-      .hero-title { font-size: 2.4rem; }
-      .workspace { grid-template-columns: 1fr; }
-      .sidebar { position: static; max-height: none; }
-      .pipeline-grid { grid-template-columns: 1fr; }
-      .pipeline-arrow { transform: rotate(90deg); margin: 6px 0; }
+    @media (max-width: 768px) {
+      .hero-title { font-size: 2rem; }
+      .nav-links { display: none; }
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Glass Header -->
+  <!-- Glass Navigation Header -->
   <header>
     <div class="container nav">
       <a href="#" class="logo">
-        <img src="assets/app-icon.svg" alt="NtfySMS App Icon" width="32" height="32" style="border-radius: 8px;">
-        <span class="logo-title">NtfySMS</span>
+        <img src="assets/app-icon.svg" alt="ZopHop Logo" class="logo-img">
+        <span class="logo-title">ZopHop</span>
       </a>
-      <div class="nav-links">
-        <a href="#quickstart" class="nav-link">Quick Start</a>
-        <a href="#ntfy-setup" class="nav-link">ntfy</a>
-        <a href="#gotify-setup" class="nav-link">Gotify</a>
-        <a href="https://github.com/aman400/ntfysms" class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.82rem;" target="_blank">
-          GitHub Repo
+      <nav class="nav-links">
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#workflows" class="nav-link">Workflow Engine</a>
+        <a href="#vault" class="nav-link">Encrypted Vault</a>
+        <a href="#setup" class="nav-link">Setup Guide</a>
+        <a href="#presets" class="nav-link">Bank Presets</a>
+        <a href="#troubleshooting" class="nav-link">OEM Battery</a>
+      </nav>
+      <div>
+        <a href="https://github.com/aman400/zophop" target="_blank" class="btn btn-secondary">
+          <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          GitHub
         </a>
       </div>
     </div>
   </header>
 
   <!-- Hero Section -->
-  <section class="hero">
-    <div class="container">
-      <div class="hero-brand">
-        <img src="assets/app-icon.svg" alt="NtfySMS App Icon" class="hero-icon">
-        <div class="hero-badge">🚀 Open Source Android Application — Version 1.0.0</div>
-      </div>
-      <h1 class="hero-title">Forward OTP SMS & Notifications to ntfy & Gotify</h1>
-      <p class="hero-subtitle">Soothing, privacy-first Android forwarder featuring write-only topic ACL security, node-level pre-checks, Tailscale/VPN throttling, and regex payload extraction.</p>
-
-      <div class="hero-actions">
-        <a href="https://github.com/aman400/ntfysms/releases/latest" class="btn btn-primary">
-          ⚡ Download Release APK (v1.0.0)
-        </a>
-        <a href="https://github.com/aman400/ntfysms/blob/main/DOCUMENTATION.md" class="btn btn-secondary" target="_blank">
-          📖 Complete Setup Manual
-        </a>
-      </div>
-
-      <!-- Pipeline Box -->
-      <div class="pipeline-box">
-        <div class="pipeline-title">
-          <span>Visual Dispatch Pipeline Flow</span>
-          <span style="color: var(--primary);">ACTIVE 🟢</span>
-        </div>
-        <div class="pipeline-grid">
-          <div class="pipeline-card">
-            <div class="pipeline-card-title">📱 1. Message Input</div>
-            <div class="pipeline-card-desc">Telephony SMS Broadcast + App Notifications</div>
-          </div>
-          <div class="pipeline-arrow">→</div>
-          <div class="pipeline-card">
-            <div class="pipeline-card-title">🔍 2. Filter & Regex Extractor</div>
-            <div class="pipeline-card-desc">Sender allowlist + regex variable extraction (${code})</div>
-          </div>
-          <div class="pipeline-arrow">→</div>
-          <div class="pipeline-card">
-            <div class="pipeline-card-title">🚀 3. Multi-Node Dispatch</div>
-            <div class="pipeline-card-desc">ntfy / Gotify targets with VPN & healthcheck pre-checks</div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  </section>
-
-  <!-- 2-Column Workspace -->
   <div class="container">
-    <div class="workspace">
+    <section class="hero">
+      <div class="hero-brand">🚀 Open-Source Android Forwarding Automation</div>
+      <h1 class="hero-title">Visual Workflow & OTP Forwarding <span>Reimagined</span></h1>
+      <p class="hero-subtitle">
+        Capture incoming OTP SMS and app push notifications, evaluate network preconditions, execute graph-based visual workflow automation, and deliver encrypted payloads to ntfy, Gotify, and custom HTTP Webhook APIs.
+      </p>
+      <div class="hero-actions">
+        <a href="https://github.com/aman400/zophop/releases" target="_blank" class="btn btn-primary">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Download ZopHop v1.0.0 APK
+        </a>
+        <a href="#workflows" class="btn btn-secondary">Explore Workflow Builder</a>
+      </div>
 
-      <!-- Sticky Sidebar Navigation -->
-      <nav class="sidebar">
-        <div class="sidebar-group-title">GETTING STARTED</div>
-        <ul class="sidebar-menu">
-          <li><a href="#overview" class="sidebar-link active">1. Flow Overview</a></li>
-          <li><a href="#quickstart" class="sidebar-link">2. Quick Start Guide</a></li>
-        </ul>
+      <div class="badge-bar">
+        <div class="badge-item">🟢 100% On-Device & Private</div>
+        <div class="badge-item">⚡ Drag & Drop Workflow Engine</div>
+        <div class="badge-item">🔒 Biometric Hardware Vault</div>
+        <div class="badge-item">🌐 ntfy / Gotify / Webhooks</div>
+      </div>
+    </section>
 
-        <div class="sidebar-group-title">SERVER SETUP</div>
-        <ul class="sidebar-menu">
-          <li><a href="#ntfy-setup" class="sidebar-link">3. ntfy & Write-Only ACL</a></li>
-          <li><a href="#gotify-setup" class="sidebar-link">4. Gotify Server Setup</a></li>
-        </ul>
+    <!-- Architecture Visualizer SVG -->
+    <div class="arch-card">
+      <div class="arch-header">
+        <div class="arch-title">⚡ End-to-End Event Pipeline Architecture</div>
+        <span style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--primary);">System Flow v1.0.0</span>
+      </div>
+      <div class="arch-svg-container">
+        <svg viewBox="0 0 1000 240" width="100%" height="240" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Connectors -->
+          <path d="M 160 120 L 250 120" stroke="#10b981" stroke-width="3" stroke-dasharray="6 6"/>
+          <path d="M 410 120 L 500 120" stroke="#10b981" stroke-width="3"/>
+          <path d="M 660 120 L 750 120" stroke="#f59e0b" stroke-width="3"/>
 
-        <div class="sidebar-group-title">CONFIG & PATTERNS</div>
-        <ul class="sidebar-menu">
-          <li><a href="#prechecks" class="sidebar-link">5. Pre-Checks & VPN</a></li>
-          <li><a href="#regex" class="sidebar-link">6. Regex & Bank Patterns</a></li>
-        </ul>
+          <!-- Step 1: Event Capture -->
+          <rect x="10" y="50" width="150" height="140" rx="14" fill="#111827" stroke="#10b981" stroke-width="2"/>
+          <text x="85" y="85" text-anchor="middle" fill="#d1fae5" font-family="Plus Jakarta Sans" font-weight="700" font-size="14">1. Event Capture</text>
+          <rect x="25" y="105" width="120" height="30" rx="6" fill="#064e3b"/>
+          <text x="85" y="125" text-anchor="middle" fill="#34d399" font-family="Plus Jakarta Sans" font-size="12">SmsReceiver</text>
+          <rect x="25" y="145" width="120" height="30" rx="6" fill="#064e3b"/>
+          <text x="85" y="165" text-anchor="middle" fill="#34d399" font-family="Plus Jakarta Sans" font-size="12">NotificationListener</text>
 
-        <div class="sidebar-group-title">TROUBLESHOOTING</div>
-        <ul class="sidebar-menu">
-          <li><a href="#oem" class="sidebar-link">7. OEM Battery Settings</a></li>
-          <li><a href="#security" class="sidebar-link">8. Hardening & Security</a></li>
-        </ul>
-      </nav>
+          <!-- Step 2: Preconditions -->
+          <rect x="250" y="50" width="160" height="140" rx="14" fill="#111827" stroke="#10b981" stroke-width="2"/>
+          <text x="330" y="85" text-anchor="middle" fill="#d1fae5" font-family="Plus Jakarta Sans" font-weight="700" font-size="14">2. Preconditions</text>
+          <text x="330" y="115" text-anchor="middle" fill="#9ca3af" font-family="Plus Jakarta Sans" font-size="12">VPN & Internet Checks</text>
+          <text x="330" y="135" text-anchor="middle" fill="#9ca3af" font-family="Plus Jakarta Sans" font-size="12">HTTP Health Probe</text>
+          <text x="330" y="155" text-anchor="middle" fill="#9ca3af" font-family="Plus Jakarta Sans" font-size="12">Carrier SIM Status</text>
 
-      <!-- Main Column Canvas -->
-      <main class="content-area">
+          <!-- Step 3: Workflow Graph -->
+          <rect x="500" y="50" width="160" height="140" rx="14" fill="#111827" stroke="#10b981" stroke-width="2"/>
+          <text x="580" y="85" text-anchor="middle" fill="#d1fae5" font-family="Plus Jakarta Sans" font-weight="700" font-size="14">3. Workflow Engine</text>
+          <text x="580" y="115" text-anchor="middle" fill="#34d399" font-family="Plus Jakarta Sans" font-size="12">Regex / JSON Parsers</text>
+          <text x="580" y="135" text-anchor="middle" fill="#34d399" font-family="Plus Jakarta Sans" font-size="12">Condition Evaluator</text>
+          <text x="580" y="155" text-anchor="middle" fill="#34d399" font-family="Plus Jakarta Sans" font-size="12">Template Formatter</text>
 
-        <!-- Section 1: Overview -->
-        <section class="doc-card" id="overview">
-          <h2>📱 1. Overview & Flow Architecture</h2>
-          <p>NtfySMS captures incoming OTP SMS messages (and optional app notifications), extracts verification codes using regex, and forwards them to ntfy or Gotify target servers.</p>
-
-          <div class="grid">
-            <div class="grid-card">
-              <h4>🚀 ntfy & Gotify Nodes</h4>
-              <p>Configure multiple delivery targets for public ntfy.sh servers, self-hosted ntfy instances, or Gotify push servers.</p>
-            </div>
-
-            <div class="grid-card">
-              <h4>🔒 Write-Only ACL Topics</h4>
-              <p>Grant NtfySMS write-only access to post OTPs (`otp-*`), while receiver apps use read-only tokens.</p>
-            </div>
-
-            <div class="grid-card">
-              <h4>🔒 Tailscale / VPN Throttling</h4>
-              <p>Require active VPN per node. Paused messages stay queued and auto-execute when connected.</p>
-            </div>
-
-            <div class="grid-card">
-              <h4>🩺 Custom HTTP Healthchecks</h4>
-              <p>Pre-flight health pings (GET/HEAD/POST) with custom headers and status codes before delivery.</p>
-            </div>
-          </div>
-        </section>
-
-        <!-- Section 2: Quick Start -->
-        <section class="doc-card" id="quickstart">
-          <h2>⚡ 2. First-Time App Quick Start</h2>
-          <p>Follow these 4 simple steps to set up NtfySMS on your phone:</p>
-
-          <div class="callout callout-warning">
-            <strong>⚠️ Play Protect Note:</strong> When sideloading, Google Play Protect may show a *"Blocked by Play Protect"* warning. Tap <strong>"More details"</strong> → <strong>"Install anyway"</strong>.
-          </div>
-
-          <div class="grid">
-            <div class="grid-card">
-              <h4>1. Install & Grant Permissions</h4>
-              <p>Sideload <code>NtfySMS-v1.0.0.apk</code> → Open <strong>Settings</strong> → Grant <strong>SMS Permission</strong>, <strong>Notification Permission</strong>, and <strong>Battery Exemption</strong>.</p>
-            </div>
-
-            <div class="grid-card">
-              <h4>2. Add Target Delivery Node</h4>
-              <p>Tap <strong>+ Add Node</strong> under <strong>Delivery Target Nodes</strong> → Select <strong>ntfy</strong> or <strong>Gotify</strong> → Enter Server URL, Topic, or App Token.</p>
-            </div>
-
-            <div class="grid-card">
-              <h4>3. Configure Pre-Checks & Format</h4>
-              <p>Enable <strong>Require Active VPN</strong> (if using Tailscale) and test custom payload templates in the Live Tester box.</p>
-            </div>
-
-            <div class="grid-card">
-              <h4>4. Activate Forwarding</h4>
-              <p>Toggle top app bar switch to <strong>ACTIVE</strong>. Status notification will show <code>🟢 NtfySMS Active</code>.</p>
-            </div>
-          </div>
-        </section>
-
-        <!-- Section 3: ntfy Setup -->
-        <section class="doc-card" id="ntfy-setup">
-          <h2>🚀 3. ntfy Server & Write-Only ACL Setup</h2>
-          <p>Deploy ntfy (Official Repo: <a href="https://github.com/binwiederhier/ntfy" target="_blank" style="color: var(--teal);">binwiederhier/ntfy</a>) with Docker Compose and configure topic access control lists (ACL) so NtfySMS cannot read messages, and receivers cannot post messages.</p>
-
-          <h3>1. ntfy Docker Compose (`docker-compose.yml`)</h3>
-          <div class="code-box">
-            <div class="code-box-header">docker-compose.yml</div>
-            <div class="code-box-content">version: '3.8'
-
-services:
-  ntfy:
-    image: binwiederhergestellt/ntfy:latest
-    container_name: ntfy
-    restart: unless-stopped
-    command: [ serve ]
-    volumes:
-      - ./etc-ntfy:/etc/ntfy
-      - ./var-cache-ntfy:/var/cache/ntfy
-    ports:
-      - "8080:80"</div>
-          </div>
-
-          <h3>2. ntfy Security Hardening (`/etc/ntfy/server.yml`)</h3>
-          <div class="code-box">
-            <div class="code-box-header">server.yml</div>
-            <div class="code-box-content">base-url: "https://ntfy.example.com"
-auth-file: "/var/cache/ntfy/user.db"
-auth-default-access: "deny-all"
-enable-signup: false
-enable-login: true
-attachment-total-size-limit: "0"
-enable-metrics: false</div>
-          </div>
-
-          <h3>3. Setting Up Write-Only & Read-Only ACL Topic Permissions</h3>
-          <div class="code-box">
-            <div class="code-box-header">ACL Commands</div>
-            <div class="code-box-content"># Create separate user accounts
-ntfy user add ntfysms_publisher
-ntfy user add ntfy_receiver
-
-# Grant WRITE-ONLY permission on otp-* topics to NtfySMS app
-ntfy access ntfysms_publisher "otp-*" write-only
-
-# Grant READ-ONLY permission on otp-* topics to Receiver App
-ntfy access ntfy_receiver "otp-*" read-only
-
-# Generate Access Token for NtfySMS
-ntfy token add ntfysms_publisher</div>
-          </div>
-        </section>
-
-        <!-- Section 4: Gotify Setup -->
-        <section class="doc-card" id="gotify-setup">
-          <h2>🔔 4. Gotify Server Setup</h2>
-          <p>Deploy Gotify push server (Official Repo: <a href="https://github.com/gotify/server" target="_blank" style="color: var(--teal);">gotify/server</a>) and generate Application Tokens (<code>X-Gotify-Key</code>).</p>
-
-          <h3>Gotify Docker Compose (`docker-compose.yml`)</h3>
-          <div class="code-box">
-            <div class="code-box-header">docker-compose.yml</div>
-            <div class="code-box-content">version: '3.8'
-
-services:
-  gotify:
-    image: gotify/server:latest
-    container_name: gotify
-    restart: unless-stopped
-    environment:
-      - GOTIFY_SERVER_PORT=80
-      - GOTIFY_DATABASE_DIALECT=sqlite3
-    volumes:
-      - ./gotify_data:/app/data
-    ports:
-      - "8081:80"</div>
-          </div>
-
-          <div class="callout callout-info">
-            <strong>Gotify Token Creation:</strong> Log in to Gotify Web UI (`http://192.168.1.50:8081`) → Apps → <strong>Create Application</strong> (Name: NtfySMS) → Copy generated token (`A1b2C3d4E5f6`) and paste into NtfySMS App Token field.
-          </div>
-        </section>
-
-        <!-- Section 5: Pre-Checks -->
-        <section class="doc-card" id="prechecks">
-          <h2>🔒 5. Pre-Checks & Throttling Rules</h2>
-          <p>Pre-checks pause forwarding when network conditions aren't met, preventing errors:</p>
-
-          <ul style="padding-left: 20px;">
-            <li style="margin-bottom: 8px;"><strong style="color: var(--indigo-light);">🌐 Require Internet Connection:</strong> Ensures active network capability before sending.</li>
-            <li style="margin-bottom: 8px;"><strong style="color: var(--indigo-light);">🔒 Require Active VPN:</strong> Checks for active VPN transport (Tailscale, WireGuard, OpenVPN, <code>tun0</code>). Pauses forwarding when VPN is disconnected.</li>
-            <li style="margin-bottom: 8px;"><strong style="color: var(--indigo-light);">🩺 Custom HTTP Healthchecks:</strong> Pre-flight ping request (<code>GET</code>/<code>HEAD</code>/<code>POST</code>, custom health URL, headers, expected HTTP status) before transmitting payload.</li>
-          </ul>
-        </section>
-
-        <!-- Section 6: Regex Guide -->
-        <section class="doc-card" id="regex">
-          <h2>🔍 6. Regex Variable Extraction & Bank Patterns</h2>
-          <p>Extract verification codes (<code>${code}</code>, <code>${otp}</code>) and format custom payload templates.</p>
-
-          <h3>Tested Bank SMS Patterns</h3>
-          <div class="table-box">
-            <table>
-              <thead>
-                <tr>
-                  <th>Bank / Service</th>
-                  <th>Sender Header</th>
-                  <th>Sample SMS Text</th>
-                  <th>Extracted Code</th>
-                  <th>Output Payload</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><strong>HDFC Bank</strong></td>
-                  <td><code>VM-HDFCBK</code></td>
-                  <td>482910 is your OTP for HDFC Bank card transaction of Rs 1,250.00.</td>
-                  <td><strong style="color: var(--primary);">482910</strong></td>
-                  <td><code>[VM-HDFCBK] OTP: 482910</code></td>
-                </tr>
-                <tr>
-                  <td><strong>ICICI Bank</strong></td>
-                  <td><code>AX-ICICIB</code></td>
-                  <td>OTP for transaction of Rs 850.00 at Swiggy is 918234.</td>
-                  <td><strong style="color: var(--primary);">918234</strong></td>
-                  <td><code>[AX-ICICIB] OTP: 918234</code></td>
-                </tr>
-                <tr>
-                  <td><strong>SBI Bank</strong></td>
-                  <td><code>AD-SBINBK</code></td>
-                  <td>771029 is the OTP for your SBI netbanking login. Valid for 10 mins.</td>
-                  <td><strong style="color: var(--primary);">771029</strong></td>
-                  <td><code>[AD-SBINBK] OTP: 771029</code></td>
-                </tr>
-                <tr>
-                  <td><strong>Axis Bank</strong></td>
-                  <td><code>VK-AXISBK</code></td>
-                  <td>Use OTP 603912 to authorize Rs 3,400.00 on Axis Bank Credit Card.</td>
-                  <td><strong style="color: var(--primary);">603912</strong></td>
-                  <td><code>[VK-AXISBK] OTP: 603912</code></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- Interactive Tabbed Component -->
-          <div class="tab-wrapper">
-            <div class="tab-header">
-              <button class="tab-btn active" onclick="switchTab('ex1')">Template Example 1</button>
-              <button class="tab-btn" onclick="switchTab('ex2')">Template Example 2</button>
-              <button class="tab-btn" onclick="switchTab('adb')">Emulator ADB Test</button>
-            </div>
-            <div class="tab-body" id="tab-code"># Custom Payload Template:
-[${sender}] OTP Code: ${code}
-
-# Outgoing Payload Output:
-[VM-HDFCBK] OTP Code: 482910</div>
-          </div>
-        </section>
-
-        <!-- Section 7: OEM Battery -->
-        <section class="doc-card" id="oem">
-          <h2>📱 7. OEM Background Activity Settings</h2>
-          <p>Prevent aggressive OEM background killers from closing NtfySMS when screen turns off:</p>
-
-          <div class="callout callout-warning">
-            <strong>Xiaomi / POCO (MIUI / HyperOS):</strong> Security App → Permissions → Autostart → Enable NtfySMS. App Info → Battery Saver → Select <em>No Restrictions</em>. Lock card in Recent Apps 🔒.
-          </div>
-
-          <div class="callout callout-warning">
-            <strong>Samsung (One UI):</strong> Settings → Battery → Background Usage Limits → Never Sleeping Apps → Add NtfySMS.
-          </div>
-
-          <div class="callout callout-warning">
-            <strong>OnePlus / Oppo / Realme:</strong> Settings → App Management → NtfySMS → Battery Usage → Enable <em>Allow Background Activity</em> & <em>Auto Launch</em>.
-          </div>
-        </section>
-
-        <!-- Section 8: Security -->
-        <section class="doc-card" id="security">
-          <h2>🛡️ 8. Security & Data Hardening</h2>
-          <ul style="padding-left: 20px;">
-            <li style="margin-bottom: 8px;"><strong>Encrypted Token Storage:</strong> Access tokens encrypted with AES-256 GCM in Android KeyStore.</li>
-            <li style="margin-bottom: 8px;"><strong>FLAG_SECURE Screen Security:</strong> Screenshots and screen recording disabled on app screens.</li>
-            <li style="margin-bottom: 8px;"><strong>Zero Local OTP Persistence:</strong> Verification codes deleted immediately upon delivery or expiry.</li>
-            <li style="margin-bottom: 8px;"><strong>Cloud Backup Exclusion:</strong> Excluded from Google Drive cloud backup (<code>allowBackup="false"</code>).</li>
-          </ul>
-        </section>
-
-      </main>
-
+          <!-- Step 4: Encrypted Delivery -->
+          <rect x="750" y="50" width="230" height="140" rx="14" fill="#111827" stroke="#f59e0b" stroke-width="2"/>
+          <text x="865" y="85" text-anchor="middle" fill="#fef3c7" font-family="Plus Jakarta Sans" font-weight="700" font-size="14">4. Encrypted Targets</text>
+          <rect x="765" y="105" width="65" height="30" rx="6" fill="#78350f"/>
+          <text x="797" y="125" text-anchor="middle" fill="#fbbf24" font-family="Plus Jakarta Sans" font-size="12">ntfy.sh</text>
+          <rect x="840" y="105" width="65" height="30" rx="6" fill="#78350f"/>
+          <text x="872" y="125" text-anchor="middle" fill="#fbbf24" font-family="Plus Jakarta Sans" font-size="12">Gotify</text>
+          <rect x="915" y="105" width="55" height="30" rx="6" fill="#78350f"/>
+          <text x="942" y="125" text-anchor="middle" fill="#fbbf24" font-family="Plus Jakarta Sans" font-size="12">HTTP</text>
+          <text x="865" y="165" text-anchor="middle" fill="#9ca3af" font-family="Plus Jakarta Sans" font-size="11">AES-256 KeyStore Protection</text>
+        </svg>
+      </div>
     </div>
+
+    <!-- Features Grid -->
+    <section id="features">
+      <span class="section-tag">Core Features</span>
+      <h2 class="section-title">Built for Reliability, Privacy & Complete Control</h2>
+      <p class="section-subtitle">
+        Everything you need to automate notification forwarding behind private networks, home labs, and self-hosted environments.
+      </p>
+
+      <div class="grid-3">
+        <div class="card">
+          <div class="card-icon">⚡</div>
+          <h3 class="card-title">Visual Workflow Engine</h3>
+          <p class="card-text">
+            Build graph-based automation using Triggers, Parsers, Condition Evaluators, and Webhook Actions. Includes node failure retry policies and live step progress tracking.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🌐</div>
+          <h3 class="card-title">Multi-Target Delivery Nodes</h3>
+          <p class="card-text">
+            Configure multiple delivery nodes (ntfy.sh, Gotify, Webhooks) with per-node healthcheck URL probes, required VPN checks, and network capability requirements.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon amber">🔒</div>
+          <h3 class="card-title">Encrypted Vault & Biometric Lock</h3>
+          <p class="card-text">
+            Store Bearer Tokens, API keys, and Basic Auth credentials securely in an AES-256 GCM encrypted vault protected by Android KeyStore and Biometric fingerprint authentication.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🛡️</div>
+          <h3 class="card-title">Precondition System</h3>
+          <p class="card-text">
+            Verify active VPN connections (Tailscale/WireGuard), internet status, carrier SIM readiness, and HTTP health endpoints before triggering workflows.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">📱</div>
+          <h3 class="card-title">SMS & Notification Listener</h3>
+          <p class="card-text">
+            Capture cellular SMS OTP text messages and app push notifications from WhatsApp, Telegram, or banking apps with regex keyword filtering and sender allowlists.
+          </p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon amber">⚙️</div>
+          <h3 class="card-title">Resilient WorkManager Queue</h3>
+          <p class="card-text">
+            Configurable parallel execution limits (1–10) and queue sizes (5–100) with automatic exponential backoff retry worker for network recovery.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Workflows Section -->
+    <section id="workflows">
+      <span class="section-tag">Visual Automation</span>
+      <h2 class="section-title">Drag & Drop Workflow Graph Nodes</h2>
+      <p class="section-subtitle">
+        Chain nodes together visually to parse incoming SMS or notification payloads, check conditions, format data, and dispatch alerts.
+      </p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3 class="card-title" style="color: var(--primary);">⚡ Triggers & Logic Nodes</h3>
+          <ul style="list-style: none; margin-top: 14px; line-height: 2;">
+            <li><strong>SMS Trigger</strong>: Triggers on SMS matching sender allowlists (`*BANK*`) & keyword regex.</li>
+            <li><strong>App Notification Trigger</strong>: Intercepts app push notifications by package name (`com.whatsapp`).</li>
+            <li><strong>Regex Parser</strong>: Extracts verification codes using regex (`\b\d{4,8}\b`) into dynamic keys.</li>
+            <li><strong>JSON Parser</strong>: Parses nested JSON responses (`data.user.id`, `items[0].code`).</li>
+            <li><strong>Condition Evaluator</strong>: Branches execution based on `EQUALS`, `CONTAINS`, `REGEX_MATCH`, `GREATER_THAN`, `IS_EMPTY`.</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3 class="card-title" style="color: var(--secondary);">📤 Action Nodes & Delivery</h3>
+          <ul style="list-style: none; margin-top: 14px; line-height: 2;">
+            <li><strong>ntfy Push Action</strong>: Sends alerts to ntfy topics with priority, tags, and title headers.</li>
+            <li><strong>Gotify Push Action</strong>: Delivers alerts to Gotify servers with application tokens.</li>
+            <li><strong>HTTP Webhook Action</strong>: Sends `POST`, `PUT`, `GET` HTTP requests with custom JSON body and vault auth headers.</li>
+            <li><strong>Send System Notification</strong>: Displays local system notification alerts on Android.</li>
+            <li><strong>Send Outgoing SMS</strong>: Transmits outgoing SMS messages to configured recipients.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Preconditions & Vault Section -->
+    <section id="vault">
+      <span class="section-tag">Security & Protection</span>
+      <h2 class="section-title">Hardware-Backed Credential Vault</h2>
+      <div class="alert alert-note">
+        🔒 <strong>AES-256 GCM KeyStore Protection</strong>: All access tokens, Bearer keys, and credentials are encrypted at rest. Unlocking vault secret entries or modifying security policies requires Biometric or Device Lock authentication.
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Credential Type</th>
+              <th>Supported Injection</th>
+              <th>Target Compatibility</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>BEARER_TOKEN</code></td>
+              <td><code>Authorization: Bearer &lt;token&gt;</code></td>
+              <td>HTTP Webhooks, ntfy.sh</td>
+            </tr>
+            <tr>
+              <td><code>BASIC_AUTH</code></td>
+              <td><code>Authorization: Basic &lt;base64&gt;</code></td>
+              <td>HTTP Webhooks, Self-Hosted Proxies</td>
+            </tr>
+            <tr>
+              <td><code>HEADER_SET</code></td>
+              <td>Custom Key-Value Header Pairs</td>
+              <td>Reverse Proxies, Cloudflare Workers</td>
+            </tr>
+            <tr>
+              <td><code>NTFY_AUTH</code> / <code>GOTIFY_AUTH</code></td>
+              <td>Publisher ACL Token / App Token</td>
+              <td>ntfy.sh & Gotify Servers</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Setup & Installation Section -->
+    <section id="setup">
+      <span class="section-tag">Getting Started</span>
+      <h2 class="section-title">Installation & First-Time Setup</h2>
+
+      <div class="card" style="margin-bottom: 24px;">
+        <h3 class="card-title">Step 1: Install APK & Grant Android Permissions</h3>
+        <p class="card-text" style="margin-bottom: 14px;">
+          Download <code>ZopHop-v1.0.0.apk</code> and install on Android 8.0+. When Google Play Protect prompt appears, tap <strong>"More details"</strong> → <strong>"Install anyway"</strong>.
+        </p>
+        <div class="code-box">
+          <span class="code-label">ADB Shell</span>
+          # Optional: Grant runtime SMS permission via ADB on test devices<br>
+          adb shell pm grant dev.zophop android.permission.RECEIVE_SMS
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Step 2: Server Deployment Examples</h3>
+        <p class="card-text" style="margin-bottom: 14px;">Run ntfy or Gotify using Docker Compose:</p>
+
+        <div class="code-box">
+          <span class="code-label">docker-compose.yml (ntfy)</span>
+          version: '3.8'<br>
+          services:<br>
+          &nbsp;&nbsp;ntfy:<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;image: binwiederhier/ntfy<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;command: [serve]<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;environment:<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;NTFY_BASE_URL: https://ntfy.example.com<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;NTFY_AUTH_DEFAULT_ACCESS: deny-all<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;ports: ["8080:80"]
+        </div>
+      </div>
+    </section>
+
+    <!-- Bank SMS Presets -->
+    <section id="presets">
+      <span class="section-tag">Filter Presets</span>
+      <h2 class="section-title">Indian Banking & OTP Filter Presets</h2>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Bank / Service</th>
+              <th>Sender Pattern</th>
+              <th>Regex Extractor</th>
+              <th>Template Payload</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>HDFC Bank</td>
+              <td><code>*HDFCBK*</code></td>
+              <td><code>\b\d{6}\b</code></td>
+              <td><code>[${sender}] OTP: ${code}</code></td>
+            </tr>
+            <tr>
+              <td>ICICI Bank</td>
+              <td><code>*ICICIB*</code></td>
+              <td><code>\b\d{6}\b</code></td>
+              <td><code>[${sender}] OTP: ${code}</code></td>
+            </tr>
+            <tr>
+              <td>State Bank of India (SBI)</td>
+              <td><code>*SBINBK*</code></td>
+              <td><code>\b\d{6}\b</code></td>
+              <td><code>[${sender}] OTP: ${code}</code></td>
+            </tr>
+            <tr>
+              <td>Axis Bank</td>
+              <td><code>*AXISBK*</code></td>
+              <td><code>\b\d{6}\b</code></td>
+              <td><code>[${sender}] OTP: ${code}</code></td>
+            </tr>
+            <tr>
+              <td>Google 2FA</td>
+              <td><code>Google</code></td>
+              <td><code>G-(\d{6})</code></td>
+              <td><code>[Google] Code: ${code}</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- OEM Battery Optimization Troubleshooting -->
+    <section id="troubleshooting">
+      <span class="section-tag">Troubleshooting</span>
+      <h2 class="section-title">OEM Background & Battery Optimization Fixes</h2>
+      <p class="section-subtitle">
+        Aggressive OEM power managers can delay background SMS receivers. Configure autostart and battery exemption for your phone model:
+      </p>
+
+      <div class="tab-nav">
+        <button class="tab-btn active">Xiaomi / POCO</button>
+        <button class="tab-btn">Samsung</button>
+        <button class="tab-btn">OnePlus / Oppo</button>
+        <button class="tab-btn">Pixel / Stock</button>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">📱 Xiaomi / Redmi / POCO (MIUI & HyperOS)</h3>
+        <ol style="margin-left: 20px; line-height: 2; color: var(--text-muted);">
+          <li><strong>Autostart Permission</strong>: Open Security App → Permissions → Autostart → Toggle ON for ZopHop.</li>
+          <li><strong>No Restrictions</strong>: Open Settings → Apps → Manage Apps → ZopHop → Battery Saver → Select <strong>No Restrictions</strong>.</li>
+          <li><strong>Lock in Recents</strong>: Open Recent Apps → Press & hold ZopHop window → Tap Lock Icon 🔒.</li>
+        </ol>
+      </div>
+    </section>
   </div>
 
   <!-- Footer -->
   <footer>
-    <div class="container">
-      <p>NtfySMS — Open Source Android Application built in Kotlin. Released under MIT License.</p>
-      <p style="margin-top: 6px;">
-        <a href="https://github.com/aman400/ntfysms" target="_blank">GitHub Repository</a> •
-        <a href="https://github.com/aman400/ntfysms/releases" target="_blank">Releases</a> •
-        <a href="https://github.com/aman400/ntfysms/blob/main/DOCUMENTATION.md" target="_blank">Complete Manual</a>
-      </p>
+    <div class="container footer-content">
+      <div>
+        <p><strong>ZopHop Forwarder v1.0.0</strong> — Built for Android 8.0+ (API 26–37)</p>
+        <p style="margin-top: 4px;">Open-source software released under MIT License.</p>
+      </div>
+      <div style="display: flex; gap: 16px;">
+        <a href="https://ntfy.sh" target="_blank" class="nav-link">ntfy.sh</a>
+        <a href="https://gotify.net" target="_blank" class="nav-link">Gotify</a>
+        <a href="https://github.com/aman400/zophop" target="_blank" class="nav-link">GitHub Repository</a>
+      </div>
     </div>
   </footer>
 
-  <script>
-    // Dynamic Scroll Observer for Sidebar Navigation Links
-    document.addEventListener('DOMContentLoaded', () => {
-      const sections = document.querySelectorAll('.doc-card');
-      const navLinks = document.querySelectorAll('.sidebar-link');
-
-      const observerOptions = {
-        root: null,
-        rootMargin: '-20% 0px -60% 0px',
-        threshold: 0
-      };
-
-      const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            const activeId = entry.target.getAttribute('id');
-            navLinks.forEach(link => {
-              const href = link.getAttribute('href');
-              if (href === '#' + activeId) {
-                link.classList.add('active');
-                if (history.replaceState && window.location.hash !== '#' + activeId) {
-                  history.replaceState(null, null, '#' + activeId);
-                }
-              } else {
-                link.classList.remove('active');
-              }
-            });
-          }
-        });
-      }, observerOptions);
-
-      sections.forEach(section => observer.observe(section));
-    });
-
-    function switchTab(type) {
-      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-      event.target.classList.add('active');
-
-      const codeBox = document.getElementById('tab-code');
-      if (type === 'ex1') {
-        codeBox.textContent = '# Custom Payload Template:\n[${sender}] OTP Code: ${code}\n\n# Outgoing Payload Output:\n[VM-HDFCBK] OTP Code: 482910';
-      } else if (type === 'ex2') {
-        codeBox.textContent = '# Custom Payload Template:\n🔐 Security Alert from ${sender}\nVerification Code: ${code}\nFull Message: ${body}\n\n# Outgoing Payload Output:\n🔐 Security Alert from VM-HDFCBK\nVerification Code: 482910\nFull Message: Your OTP for transaction of Rs 500 is 482910.';
-      } else if (type === 'adb') {
-        codeBox.textContent = '# Android Studio Emulator Test Command:\nadb emu sms send VM-HDFCBK "Your OTP for transaction of Rs 500 is 482910."';
-      }
-    }
-  </script>
 </body>
 </html>

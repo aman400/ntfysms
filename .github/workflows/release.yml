@@ -40,6 +40,9 @@ jobs:
       - name: Grant Execute Permission for Gradlew
         run: chmod +x gradlew
 
+      - name: Run Unit & Integration Tests Before Release
+        run: ./gradlew test --stacktrace
+
       - name: Build Release APK
         env:
           INPUT_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -47,8 +50,8 @@ jobs:
           INPUT_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           export KEYSTORE_FILE=release.keystore
-          export KEYSTORE_PASSWORD="${INPUT_KEYSTORE_PASSWORD:-ntfysms_secret}"
-          export KEY_ALIAS="${INPUT_KEY_ALIAS:-ntfysms_key}"
+          export KEYSTORE_PASSWORD="${INPUT_KEYSTORE_PASSWORD:-zophop_secret}"
+          export KEY_ALIAS="${INPUT_KEY_ALIAS:-zophop_key}"
           export KEY_PASSWORD="${INPUT_KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
           ./gradlew assembleRelease --stacktrace
 
@@ -57,6 +60,12 @@ jobs:
         run: |
           APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
           echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
+
+      - name: Upload Release APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZopHop-Release-APK
+          path: app/build/outputs/apk/release/*.apk
 
       - name: Attach APK to GitHub Release
         uses: softprops/action-gh-release@v2

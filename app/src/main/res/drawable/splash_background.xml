@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Full-screen gradient splash (for a custom splash screen / pre-Android 12 windowBackground).
+     Android 12+ system splash only supports a solid color, so it uses @color/splash_background. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Base -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:startColor="#FF111827"
+                android:endColor="#FF090D16" />
+        </shape>
+    </item>
+
+    <!-- Emerald glow (top left) -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:centerX="0.2"
+                android:centerY="0.12"
+                android:gradientRadius="90%p"
+                android:startColor="#8C10B981"
+                android:endColor="#00064E3B" />
+        </shape>
+    </item>
+
+    <!-- Amber glow (bottom right) -->
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:type="radial"
+                android:centerX="0.9"
+                android:centerY="0.95"
+                android:gradientRadius="55%p"
+                android:startColor="#40F59E0B"
+                android:endColor="#00F59E0B" />
+        </shape>
+    </item>
+
+    <!-- Centered logo -->
+    <item
+        android:width="192dp"
+        android:height="192dp"
+        android:gravity="center"
+        android:drawable="@drawable/ic_splash_icon" />
+</layer-list>

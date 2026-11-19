@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.NtfySMS" parent="@android:style/Theme.Material.NoActionBar">
+    <style name="Theme.ZopHop" parent="@android:style/Theme.Material.NoActionBar">
+    </style>
+
+    <!-- Requires: implementation("androidx.core:core-splashscreen:1.2.0") -->
+    <style name="Theme.ZopHop.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon</item>
+        <item name="postSplashScreenTheme">@style/Theme.ZopHop</item>
     </style>
 </resources>

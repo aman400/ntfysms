@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 288dp canvas; artwork stays inside the 192dp circle Android 12+ uses to mask the splash icon -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="288dp"
+    android:height="288dp"
+    android:viewportWidth="288"
+    android:viewportHeight="288">
+
+    <path
+        android:pathData="M172.06,80.52 L124.22,146.76 L166.54,146.76 L115.94,207.48"
+        android:strokeWidth="21.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:type="linear"
+                android:startX="0"
+                android:startY="70"
+                android:endX="0"
+                android:endY="220">
+                <item android:offset="0" android:color="#FF6EE7B7" />
+                <item android:offset="1" android:color="#FF10B981" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Start node -->
+    <path
+        android:fillColor="#FFD1FAE5"
+        android:pathData="M152.74,80.52 a19.32,19.32 0 1,0 38.64,0 a19.32,19.32 0 1,0 -38.64,0" />
+    <path
+        android:fillColor="#FF059669"
+        android:pathData="M164.24,80.52 a7.82,7.82 0 1,0 15.64,0 a7.82,7.82 0 1,0 -15.64,0" />
+
+    <!-- End node -->
+    <path
+        android:fillColor="#FFFBBF24"
+        android:pathData="M96.62,207.48 a19.32,19.32 0 1,0 38.64,0 a19.32,19.32 0 1,0 -38.64,0" />
+    <path
+        android:fillColor="#FF451A03"
+        android:pathData="M108.12,207.48 a7.82,7.82 0 1,0 15.64,0 a7.82,7.82 0 1,0 -15.64,0" />
+</vector>
