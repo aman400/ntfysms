@@ -42,11 +42,7 @@ fun AddChainNodeDialog(
     )
 
     val actionNodes = listOf(
-        NodeType.HTTP_ACTION,
-        NodeType.NTFY_ACTION,
-        NodeType.GOTIFY_ACTION,
-        NodeType.SEND_NOTIFICATION_ACTION,
-        NodeType.SEND_SMS_ACTION
+        NodeType.HTTP_ACTION
     )
 
     NoSwipeBottomSheet(
@@ -102,7 +98,7 @@ fun AddChainNodeDialog(
                 }
 
                 Text(
-                    text = "Actions & Delivery",
+                    text = "Network & Probing",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
