@@ -4,12 +4,12 @@ import android.Manifest
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import dev.zophop.domain.engine.ExecutionContext
 import dev.zophop.domain.engine.PreconditionEvaluator
 import dev.zophop.domain.engine.PreconditionResult
-import dev.zophop.domain.engine.executors.NodeExecutionResult
-import dev.zophop.domain.engine.executors.SendSmsExecutor
-import dev.zophop.domain.engine.executors.SmsTriggerExecutor
+import dev.zophop.plugin.api.ExecutionContext
+import dev.zophop.plugin.api.NodeExecutionResult
+import dev.zophop.plugin.sms.SendSmsExecutor
+import dev.zophop.plugin.sms.SmsTriggerExecutor
 import dev.zophop.domain.model.NodeType
 import dev.zophop.domain.model.Precondition
 import dev.zophop.domain.model.WorkflowNode

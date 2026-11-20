@@ -173,7 +173,19 @@ fun WorkflowEditorScreen(
                         hasSmsPermission = hasSmsPermission,
                         onRequestSmsPermission = onRequestSmsPermission,
                         onRequestPostNotificationsPermission = onRequestPostNotificationsPermission,
-                        onDismiss = { editingNode = null },
+                        onDismiss = {
+                            val currentEditingId = editingNode?.id
+                            if (currentEditingId != null && unsavedNodeIds.contains(currentEditingId)) {
+                                nodes = nodes.filterNot { it.id == currentEditingId }
+                                val newConns = mutableListOf<WorkflowConnection>()
+                                for (i in 0 until nodes.size - 1) {
+                                    newConns.add(WorkflowConnection(fromNodeId = nodes[i].id, toNodeId = nodes[i + 1].id))
+                                }
+                                connections = newConns
+                                unsavedNodeIds = unsavedNodeIds - currentEditingId
+                            }
+                            editingNode = null
+                        },
                         onSave = { updatedNode ->
                             nodes = nodes.map { if (it.id == updatedNode.id) updatedNode else it }
                             unsavedNodeIds = unsavedNodeIds - updatedNode.id
@@ -429,19 +441,19 @@ fun WorkflowEditorScreen(
                             if (addedNodes.isNotEmpty()) {
                                 Text("• Added Nodes (${addedNodes.size}):", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                                 addedNodes.forEach {
-                                    Text("  + ${it.name} [${it.type.name}]", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                                    Text("  + ${it.name} [${it.type}]", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
                                 }
                             }
                             if (removedNodes.isNotEmpty()) {
                                 Text("• Removed Nodes (${removedNodes.size}):", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
                                 removedNodes.forEach {
-                                    Text("  - ${it.name} [${it.type.name}]", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                                    Text("  - ${it.name} [${it.type}]", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
                                 }
                             }
                             if (modifiedNodes.isNotEmpty()) {
                                 Text("• Modified Nodes (${modifiedNodes.size}):", fontWeight = FontWeight.Bold)
                                 modifiedNodes.forEach {
-                                    Text("  ~ ${it.name} [${it.type.name}]", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                                    Text("  ~ ${it.name} [${it.type}]", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
                                 }
                             }
                             if (reordered && addedNodes.isEmpty() && removedNodes.isEmpty() && modifiedNodes.isEmpty()) {
@@ -602,7 +614,7 @@ fun WorkflowNodeCardItem(
     }
 
     val (missingPermTitle, missingPermDesc, onGrantClick) = when {
-        node.type == NodeType.NOTIFICATION_TRIGGER && !hasNotificationListenerPermission -> Triple(
+        node.type.contains("NOTIFICATION_TRIGGER", ignoreCase = true) && !hasNotificationListenerPermission -> Triple(
             "⚠️ Notification Listener Permission Missing",
             "Workflow cannot run until Notification Access is granted in Android settings.",
             {
@@ -611,17 +623,17 @@ fun WorkflowNodeCardItem(
                 } catch (_: Exception) {}
             }
         )
-        node.type == NodeType.SMS_TRIGGER && !hasSmsPermission -> Triple(
+        node.type.contains("SMS_TRIGGER", ignoreCase = true) && !hasSmsPermission -> Triple(
             "⚠️ SMS Permission Missing (RECEIVE_SMS)",
             "Workflow cannot intercept incoming SMS text messages without SMS permission.",
             { onRequestSmsPermission?.invoke() }
         )
-        node.type == NodeType.SEND_SMS_ACTION && !hasSendSmsPermission -> Triple(
+        node.type.contains("SEND_SMS_ACTION", ignoreCase = true) && !hasSendSmsPermission -> Triple(
             "⚠️ Send SMS Permission Missing (SEND_SMS)",
             "Sending text messages via SIM card requires SEND_SMS permission.",
             { sendSmsPermissionLauncher.launch(android.Manifest.permission.SEND_SMS) }
         )
-        node.type == NodeType.SEND_NOTIFICATION_ACTION && android.os.Build.VERSION.SDK_INT >= 33 && !hasPostNotificationsPermission -> Triple(
+        node.type.contains("SEND_NOTIFICATION_ACTION", ignoreCase = true) && android.os.Build.VERSION.SDK_INT >= 33 && !hasPostNotificationsPermission -> Triple(
             "⚠️ Notification Permission Missing (POST_NOTIFICATIONS)",
             "Displaying local system notifications requires POST_NOTIFICATIONS permission.",
             { onRequestPostNotificationsPermission?.invoke() }
@@ -864,11 +876,26 @@ fun WorkflowNodeCardItem(
 @Composable
 fun AddNodeScreen(
     onBack: () -> Unit,
-    onSelectNodeType: (NodeType) -> Unit
+    onSelectNodeType: (String) -> Unit
 ) {
-    val triggerNodes = listOf(NodeType.SMS_TRIGGER, NodeType.NOTIFICATION_TRIGGER)
-    val parserNodes = listOf(NodeType.PARSE_NOTIFICATION, NodeType.REGEX_PARSER, NodeType.JSON_PARSER, NodeType.TEMPLATE_FORMATTER, NodeType.CONDITION)
-    val actionNodes = listOf(NodeType.NTFY_ACTION, NodeType.GOTIFY_ACTION, NodeType.HTTP_ACTION, NodeType.SEND_NOTIFICATION_ACTION, NodeType.SEND_SMS_ACTION)
+    val context = LocalContext.current
+    val unifiedRegistry = remember { dev.zophop.domain.engine.plugin.UnifiedPluginRegistry(context) }
+    var regularManifests by remember { mutableStateOf<List<dev.zophop.plugin.api.NodePluginManifest>>(emptyList()) }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        val allManifests = unifiedRegistry.getAllManifests()
+        regularManifests = allManifests.filter { it.isRegularNode() }
+    }
+
+    val extractionNodes = remember(regularManifests) {
+        regularManifests.filter { it.category == dev.zophop.plugin.api.NodeCategory.EXTRACTION }
+    }
+    val logicNodes = remember(regularManifests) {
+        regularManifests.filter { it.category == dev.zophop.plugin.api.NodeCategory.LOGIC }
+    }
+    val actionNodes = remember(regularManifests) {
+        regularManifests.filter { it.category == dev.zophop.plugin.api.NodeCategory.ACTION }
+    }
 
     Scaffold(
         topBar = {
@@ -892,19 +919,25 @@ fun AddNodeScreen(
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            Text(text = "⚡ Trigger Sources", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            triggerNodes.forEach { type ->
-                NodeSelectionCard(type = type, onClick = { onSelectNodeType(type) })
+            if (extractionNodes.isNotEmpty()) {
+                Text(text = "🔍 Parsers & Extraction", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                extractionNodes.forEach { manifest ->
+                    PluginNodeSelectionCard(manifest = manifest, onClick = { onSelectNodeType(manifest.typeId) })
+                }
             }
 
-            Text(text = "🔍 Parsers & Logic", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            parserNodes.forEach { type ->
-                NodeSelectionCard(type = type, onClick = { onSelectNodeType(type) })
+            if (logicNodes.isNotEmpty()) {
+                Text(text = "⚙️ Logic & Rules", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                logicNodes.forEach { manifest ->
+                    PluginNodeSelectionCard(manifest = manifest, onClick = { onSelectNodeType(manifest.typeId) })
+                }
             }
 
-            Text(text = "🚀 Actions & Delivery", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-            actionNodes.forEach { type ->
-                NodeSelectionCard(type = type, onClick = { onSelectNodeType(type) })
+            if (actionNodes.isNotEmpty()) {
+                Text(text = "🚀 Actions & Delivery", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                actionNodes.forEach { manifest ->
+                    PluginNodeSelectionCard(manifest = manifest, onClick = { onSelectNodeType(manifest.typeId) })
+                }
             }
 
             Spacer(modifier = Modifier.height(36.dp))
@@ -913,8 +946,8 @@ fun AddNodeScreen(
 }
 
 @Composable
-fun NodeSelectionCard(
-    type: NodeType,
+fun PluginNodeSelectionCard(
+    manifest: dev.zophop.plugin.api.NodePluginManifest,
     onClick: () -> Unit
 ) {
     OutlinedCard(
@@ -928,10 +961,10 @@ fun NodeSelectionCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(imageVector = WorkflowUiHelper.getNodeIcon(type), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Icon(imageVector = WorkflowUiHelper.getNodeIcon(manifest.typeId), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
             Column {
-                Text(text = WorkflowUiHelper.getNodeTitle(type), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text(text = WorkflowUiHelper.getNodeDescription(type), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(text = manifest.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(text = manifest.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

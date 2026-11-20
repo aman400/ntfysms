@@ -1,0 +1,47 @@
+package dev.zophop.ntfyplugin
+
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import dev.zophop.plugin.api.NodePluginManifest
+import org.json.JSONObject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.Robolectric
+import org.robolectric.annotation.Config
+
+@RunWith(AndroidJUnit4::class)
+@Config(manifest = Config.NONE)
+class NtfyNodePluginServiceTest {
+
+    @Test
+    fun testNtfyPluginManifestStructure() {
+        val serviceController = Robolectric.buildService(NtfyNodePluginService::class.java).create()
+        val service = serviceController.get()
+        val binder = service.onBind(null) as dev.zophop.plugin.api.INodePluginService
+        val manifests = binder.getManifests()
+
+        assertEquals(1, manifests.size)
+        val ntfyAction = manifests.first()
+
+        assertEquals("dev.zophop.ntfyplugin.NTFY_ACTION", ntfyAction.typeId)
+        assertEquals("NTFY_AUTH", ntfyAction.requiredCredentialType)
+        assertTrue(ntfyAction.requiredPermissions.isEmpty())
+        assertEquals(6, ntfyAction.configSchema.size)
+    }
+
+    @Test
+    fun testNtfyActionFailsOnEmptyServerUrl() {
+        val serviceController = Robolectric.buildService(NtfyNodePluginService::class.java).create()
+        val service = serviceController.get()
+        val binder = service.onBind(null) as dev.zophop.plugin.api.INodePluginService
+
+        val configJson = """{"typeId":"dev.zophop.ntfyplugin.NTFY_ACTION"}"""
+        val resultJson = binder.executeNode("node_1", configJson, "{}")
+
+        val json = JSONObject(resultJson)
+        assertEquals(false, json.getBoolean("isSuccess"))
+        assertTrue(json.getString("errorReason").contains("serverUrl is empty"))
+    }
+}

@@ -124,14 +124,14 @@ class PreconditionVaultMappingAndValidationTest {
                 put(JSONObject().apply {
                     put("id", "c_n1")
                     put("name", "Manual Test Data")
-                    put("type", NodeType.MANUAL_TRIGGER.name)
+                    put("type", NodeType.MANUAL_TRIGGER)
                     put("isEnabled", true)
                     put("configJson", """{"testBody":"{\"status\":\"OK\"}"}""")
                 })
                 put(JSONObject().apply {
                     put("id", "c_n2")
                     put("name", "Status Extractor")
-                    put("type", NodeType.JSON_PARSER.name)
+                    put("type", NodeType.JSON_PARSER)
                     put("isEnabled", true)
                     put("configJson", """{"jsonKey":"status","outputKey":"state"}""")
                 })

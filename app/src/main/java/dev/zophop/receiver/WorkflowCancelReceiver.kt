@@ -19,11 +19,9 @@ class WorkflowCancelReceiver : BroadcastReceiver() {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             if (notificationId != -1) {
                 nm?.cancel(notificationId)
-            } else if (!workflowId.isNullOrBlank()) {
-                nm?.cancel(workflowId.hashCode())
             }
-
             if (!workflowId.isNullOrBlank()) {
+                nm?.cancel(workflowId.hashCode())
                 ExecutionJobRegistry.cancelJob(workflowId)
             } else {
                 ExecutionJobRegistry.cancelAllJobs()

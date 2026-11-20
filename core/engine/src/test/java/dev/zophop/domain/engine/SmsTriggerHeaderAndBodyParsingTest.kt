@@ -1,7 +1,8 @@
 package dev.zophop.domain.engine
 
-import dev.zophop.domain.engine.executors.NodeExecutionResult
-import dev.zophop.domain.engine.executors.SmsTriggerExecutor
+import dev.zophop.plugin.api.ExecutionContext
+import dev.zophop.plugin.api.NodeExecutionResult
+import dev.zophop.plugin.sms.SmsTriggerExecutor
 import dev.zophop.domain.model.NodeType
 import dev.zophop.domain.model.WorkflowNode
 import kotlinx.coroutines.test.runTest
@@ -65,7 +66,7 @@ class SmsTriggerHeaderAndBodyParsingTest {
     }
 
     @Test
-    fun testSmsTriggerFailsWhenHeaderDoesNotMatchAllowlist() = runTest {
+    fun testSmsTriggerIgnoresWhenHeaderDoesNotMatchAllowlist() = runTest {
         val executor = SmsTriggerExecutor()
         val node = WorkflowNode(
             id = "sms_node_3",
@@ -83,13 +84,13 @@ class SmsTriggerHeaderAndBodyParsingTest {
 
         val result = executor.execute(node, context, null)
 
-        assertTrue(result is NodeExecutionResult.Failed)
-        val reason = (result as NodeExecutionResult.Failed).reason
-        assertTrue(reason.contains("UNKNOWN_SPAMMERS") || reason.contains("allowlist"))
+        assertTrue(result is NodeExecutionResult.Ignored)
+        val reason = (result as NodeExecutionResult.Ignored).reason
+        assertTrue(reason.contains("allowlist"))
     }
 
     @Test
-    fun testSmsTriggerFailsWhenBodyDoesNotMatchKeywordRegex() = runTest {
+    fun testSmsTriggerIgnoresWhenBodyDoesNotMatchKeywordRegex() = runTest {
         val executor = SmsTriggerExecutor()
         val node = WorkflowNode(
             id = "sms_node_4",
@@ -107,8 +108,8 @@ class SmsTriggerHeaderAndBodyParsingTest {
 
         val result = executor.execute(node, context, null)
 
-        assertTrue(result is NodeExecutionResult.Failed)
-        val reason = (result as NodeExecutionResult.Failed).reason
+        assertTrue(result is NodeExecutionResult.Ignored)
+        val reason = (result as NodeExecutionResult.Ignored).reason
         assertTrue(reason.contains("keyword regex") || reason.contains("body"))
     }
 }

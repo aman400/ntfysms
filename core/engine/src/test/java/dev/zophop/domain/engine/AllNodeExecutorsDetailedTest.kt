@@ -1,8 +1,16 @@
 package dev.zophop.domain.engine
 
 import dev.zophop.domain.engine.executors.*
+import dev.zophop.domain.engine.plugin.BuiltInPluginRegistry
 import dev.zophop.domain.model.NodeType
 import dev.zophop.domain.model.WorkflowNode
+import dev.zophop.plugin.api.ExecutionContext
+import dev.zophop.plugin.api.NodeExecutionResult
+import dev.zophop.plugin.gotify.GotifyActionExecutor
+import dev.zophop.plugin.ntfy.NtfyActionExecutor
+import dev.zophop.plugin.sms.SendSmsExecutor
+import dev.zophop.plugin.sms.SmsTriggerExecutor
+import dev.zophop.plugin.notification.NotificationTriggerExecutor
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
 import okhttp3.Protocol
@@ -16,20 +24,27 @@ class AllNodeExecutorsDetailedTest {
 
     @Test
     fun testNodeExecutorFactoryCreatesCorrectExecutors() {
+        BuiltInPluginRegistry.registerModule(dev.zophop.plugin.sms.SmsPluginModule)
+        BuiltInPluginRegistry.registerModule(dev.zophop.plugin.notification.NotificationPluginModule)
+        BuiltInPluginRegistry.registerModule(dev.zophop.plugin.ntfy.NtfyPluginModule)
+        BuiltInPluginRegistry.registerModule(dev.zophop.plugin.gotify.GotifyPluginModule)
+        BuiltInPluginRegistry.registerModule(dev.zophop.plugin.call.CallPluginModule)
+        BuiltInPluginRegistry.registerModule(dev.zophop.plugin.gps.GpsPluginModule)
+
         val factory = NodeExecutorFactory()
 
-        assertTrue(factory.getExecutor(NodeType.SMS_TRIGGER) is SmsTriggerExecutor)
-        assertTrue(factory.getExecutor(NodeType.NOTIFICATION_TRIGGER) is NotificationTriggerExecutor)
-        assertTrue(factory.getExecutor(NodeType.MANUAL_TRIGGER) is ManualTriggerExecutor)
-        assertTrue(factory.getExecutor(NodeType.REGEX_PARSER) is RegexParserExecutor)
-        assertTrue(factory.getExecutor(NodeType.JSON_PARSER) is JsonParserExecutor)
-        assertTrue(factory.getExecutor(NodeType.TEMPLATE_FORMATTER) is TemplateFormatterExecutor)
-        assertTrue(factory.getExecutor(NodeType.CONDITION) is ConditionExecutor)
-        assertTrue(factory.getExecutor(NodeType.HTTP_ACTION) is HttpActionExecutor)
-        assertTrue(factory.getExecutor(NodeType.NTFY_ACTION) is NtfyActionExecutor)
-        assertTrue(factory.getExecutor(NodeType.GOTIFY_ACTION) is GotifyActionExecutor)
-        assertTrue(factory.getExecutor(NodeType.SEND_NOTIFICATION_ACTION) is SendNotificationExecutor)
-        assertTrue(factory.getExecutor(NodeType.SEND_SMS_ACTION) is SendSmsExecutor)
+        assertEquals("SmsTriggerExecutor", factory.getExecutor("dev.zophop.plugin.sms.SMS_TRIGGER")::class.java.simpleName)
+        assertEquals("NotificationTriggerExecutor", factory.getExecutor("dev.zophop.plugin.notification.NOTIFICATION_TRIGGER")::class.java.simpleName)
+        assertEquals("ManualTriggerExecutor", factory.getExecutor(NodeType.MANUAL_TRIGGER)::class.java.simpleName)
+        assertEquals("RegexParserExecutor", factory.getExecutor(NodeType.REGEX_PARSER)::class.java.simpleName)
+        assertEquals("JsonParserExecutor", factory.getExecutor(NodeType.JSON_PARSER)::class.java.simpleName)
+        assertEquals("TemplateFormatterExecutor", factory.getExecutor(NodeType.TEMPLATE_FORMATTER)::class.java.simpleName)
+        assertEquals("ConditionExecutor", factory.getExecutor(NodeType.CONDITION)::class.java.simpleName)
+        assertEquals("HttpActionExecutor", factory.getExecutor(NodeType.HTTP_ACTION)::class.java.simpleName)
+        assertEquals("NtfyActionExecutor", factory.getExecutor(NodeType.NTFY_ACTION)::class.java.simpleName)
+        assertEquals("GotifyActionExecutor", factory.getExecutor(NodeType.GOTIFY_ACTION)::class.java.simpleName)
+        assertEquals("SendNotificationExecutor", factory.getExecutor(NodeType.SEND_NOTIFICATION_ACTION)::class.java.simpleName)
+        assertEquals("SendSmsExecutor", factory.getExecutor("dev.zophop.plugin.sms.SEND_SMS_ACTION")::class.java.simpleName)
     }
 
     @Test
@@ -57,8 +72,7 @@ class AllNodeExecutorsDetailedTest {
             }
             .build()
 
-        val httpExecutor = HttpActionExecutor(client)
-        val ntfyExecutor = NtfyActionExecutor(httpExecutor)
+        val ntfyExecutor = NtfyActionExecutor(client)
 
         val node = WorkflowNode(
             id = "ntfy1",
@@ -112,8 +126,7 @@ class AllNodeExecutorsDetailedTest {
             }
             .build()
 
-        val httpExecutor = HttpActionExecutor(client)
-        val gotifyExecutor = GotifyActionExecutor(httpExecutor)
+        val gotifyExecutor = GotifyActionExecutor(client)
 
         val node = WorkflowNode(
             id = "gotify1",
@@ -142,7 +155,7 @@ class AllNodeExecutorsDetailedTest {
     @Test
     fun testNtfyActionExecutorFailsOnEmptyServerUrl() = runTest {
         val client = OkHttpClient.Builder().build()
-        val ntfyExecutor = NtfyActionExecutor(HttpActionExecutor(client))
+        val ntfyExecutor = NtfyActionExecutor(client)
 
         val node = WorkflowNode("n1", "ntfy", NodeType.NTFY_ACTION, true, """{"serverUrl":"","topic":"test"}""")
         val context = ExecutionContext(mapOf("body" to "test"))
@@ -154,7 +167,7 @@ class AllNodeExecutorsDetailedTest {
     @Test
     fun testGotifyActionExecutorFailsOnEmptyServerUrl() = runTest {
         val client = OkHttpClient.Builder().build()
-        val gotifyExecutor = GotifyActionExecutor(HttpActionExecutor(client))
+        val gotifyExecutor = GotifyActionExecutor(client)
 
         val node = WorkflowNode("g1", "gotify", NodeType.GOTIFY_ACTION, true, """{"serverUrl":""}""")
         val context = ExecutionContext(mapOf("body" to "test"))

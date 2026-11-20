@@ -10,7 +10,7 @@ class WorkflowAndPreconditionModelTest {
 
     @Test
     fun testWorkflowModelImmutabilityAndCopy() {
-        val node1 = WorkflowNode("n1", "Node 1", NodeType.SMS_TRIGGER)
+        val node1 = WorkflowNode("n1", "Node 1", "SMS_TRIGGER")
         val conn1 = WorkflowConnection("n1", "n2")
 
         val workflow = Workflow(

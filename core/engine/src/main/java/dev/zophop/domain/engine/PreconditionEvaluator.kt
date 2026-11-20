@@ -10,23 +10,24 @@ import android.net.NetworkCapabilities
 import android.os.Build
 import android.telephony.TelephonyManager
 import androidx.core.app.NotificationCompat
-import dev.zophop.domain.model.NodeType
+import dev.zophop.domain.engine.plugin.BuiltInPluginRegistry
+import dev.zophop.domain.engine.plugin.CoreEngineNodesModule
 import dev.zophop.domain.model.Precondition
 import dev.zophop.domain.model.PreconditionType
 import dev.zophop.domain.model.Workflow
-import dev.zophop.domain.model.WorkflowConnection
-import dev.zophop.domain.model.WorkflowNode
+import dev.zophop.plugin.api.ExecutionContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.NetworkInterface
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlin.time.Duration.Companion.milliseconds
 
 sealed class PreconditionResult {
     data class Passed(val steps: List<NodeExecutionStep> = emptyList()) : PreconditionResult()
@@ -75,7 +76,7 @@ open class PreconditionEvaluator(
             val skippedStep = NodeExecutionStep(
                 nodeId = precondition.id.ifBlank { "prec_skipped" },
                 nodeName = "Precondition Disabled",
-                nodeType = NodeType.HTTP_ACTION,
+                nodeType = CoreEngineNodesModule.HTTP_ACTION,
                 state = NodeStepState.SKIPPED,
                 logMessage = "Precondition is disabled, skipping check."
             )
@@ -98,7 +99,7 @@ open class PreconditionEvaluator(
                 val intervalSec = precondition.retryIntervalSeconds.coerceAtLeast(1)
 
                 // Keep failed attempt steps intact as FAILED so they render red as earlier
-                val historySteps = (result as? PreconditionResult.Failed)?.steps?.toMutableList() ?: mutableListOf()
+                val historySteps = result.steps.toMutableList()
 
                 for (attempt in 1..maxRetries) {
                     ensureActive()
@@ -109,14 +110,14 @@ open class PreconditionEvaluator(
                         val retryNoticeStep = NodeExecutionStep(
                             nodeId = "retry_delay_$attempt",
                             nodeName = "⏳ Retrying ($attempt/$maxRetries)",
-                            nodeType = NodeType.HTTP_ACTION,
+                            nodeType = CoreEngineNodesModule.HTTP_ACTION,
                             state = NodeStepState.EXECUTING,
                             logMessage = "Precondition check failed. Waiting ${sec}s remaining before attempt #${attempt + 1}/${maxRetries + 1}..."
                         )
                         val currentProgress = historySteps + retryNoticeStep
                         onStepUpdate?.invoke(currentProgress)
 
-                        kotlinx.coroutines.delay(1000L)
+                        kotlinx.coroutines.delay(1000L.milliseconds)
                     }
 
                     ensureActive()
@@ -164,7 +165,7 @@ open class PreconditionEvaluator(
                 val step = NodeExecutionStep(
                     nodeId = "internet_check",
                     nodeName = "🌐 Network / Internet Check",
-                    nodeType = NodeType.HTTP_ACTION,
+                    nodeType = CoreEngineNodesModule.HTTP_ACTION,
                     state = if (isOk) NodeStepState.SUCCESS else NodeStepState.FAILED,
                     logMessage = if (isOk) "Active Internet connection verified" else "Internet connection unavailable",
                     errorReason = if (!isOk) "Internet connection unavailable" else null
@@ -178,7 +179,7 @@ open class PreconditionEvaluator(
                 val step = NodeExecutionStep(
                     nodeId = "vpn_check",
                     nodeName = "🔐 VPN Connection Check",
-                    nodeType = NodeType.HTTP_ACTION,
+                    nodeType = CoreEngineNodesModule.HTTP_ACTION,
                     state = if (isOk) NodeStepState.SUCCESS else NodeStepState.FAILED,
                     logMessage = if (isOk) "Active VPN connection verified (Tailscale/WireGuard/OpenVPN)" else "VPN connection required (Awaiting Tailscale/WireGuard/VPN)",
                     errorReason = if (!isOk) "VPN connection required (Awaiting Tailscale/WireGuard/VPN)" else null
@@ -189,7 +190,7 @@ open class PreconditionEvaluator(
             }
             is Precondition.HealthCheck -> {
                 if (!precondition.isEnabled) {
-                    val step = NodeExecutionStep(nodeId = "health_check", nodeName = "🩺 HTTP Healthcheck", nodeType = NodeType.HTTP_ACTION, state = NodeStepState.SUCCESS, logMessage = "Healthcheck disabled, skipping.")
+                    val step = NodeExecutionStep(nodeId = "health_check", nodeName = "🩺 HTTP Healthcheck", nodeType = CoreEngineNodesModule.HTTP_ACTION, state = NodeStepState.SUCCESS, logMessage = "Healthcheck disabled, skipping.")
                     onStepUpdate?.invoke(listOf(step))
                     PreconditionResult.Passed(steps = listOf(step))
                 } else {
@@ -199,7 +200,7 @@ open class PreconditionEvaluator(
                     val step = NodeExecutionStep(
                         nodeId = "health_check",
                         nodeName = "🩺 HTTP Healthcheck (${precondition.method} ${precondition.targetUrl})",
-                        nodeType = NodeType.HTTP_ACTION,
+                        nodeType = CoreEngineNodesModule.HTTP_ACTION,
                         state = if (isOk) NodeStepState.SUCCESS else NodeStepState.FAILED,
                         logMessage = if (isOk) "HTTP ${precondition.method} -> ${precondition.targetUrl} returned expected status ${precondition.expectedStatus}" else (failReason ?: "Healthcheck failed"),
                         errorReason = failReason
@@ -210,7 +211,7 @@ open class PreconditionEvaluator(
             }
             is Precondition.SimCheck -> {
                 if (!precondition.isEnabled) {
-                    val step = NodeExecutionStep(nodeId = "sim_check", nodeName = "📱 SIM Card Active Check", nodeType = NodeType.HTTP_ACTION, state = NodeStepState.SUCCESS, logMessage = "SIM check disabled, skipping.")
+                    val step = NodeExecutionStep(nodeId = "sim_check", nodeName = "📱 SIM Card Active Check", nodeType = CoreEngineNodesModule.CONDITION, state = NodeStepState.SUCCESS, logMessage = "SIM check disabled, skipping.")
                     onStepUpdate?.invoke(listOf(step))
                     PreconditionResult.Passed(steps = listOf(step))
                 } else {
@@ -220,7 +221,7 @@ open class PreconditionEvaluator(
                     val step = NodeExecutionStep(
                         nodeId = "sim_check",
                         nodeName = "📱 SIM Card Active Check",
-                        nodeType = NodeType.HTTP_ACTION,
+                        nodeType = CoreEngineNodesModule.CONDITION,
                         state = if (isOk) NodeStepState.SUCCESS else NodeStepState.FAILED,
                         logMessage = if (isOk) "Active SIM card verified${if (precondition.requiredCarrier.isNotBlank()) " (Carrier: ${precondition.requiredCarrier})" else ""}" else (failReason ?: "SIM check failed"),
                         errorReason = failReason
@@ -231,7 +232,7 @@ open class PreconditionEvaluator(
             }
             is Precondition.GpsCheck -> {
                 if (!precondition.isEnabled) {
-                    val step = NodeExecutionStep(nodeId = "gps_check", nodeName = "📍 GPS / Location Check", nodeType = NodeType.HTTP_ACTION, state = NodeStepState.SUCCESS, logMessage = "GPS check disabled, skipping.")
+                    val step = NodeExecutionStep(nodeId = "gps_check", nodeName = "📍 GPS / Location Check", nodeType = CoreEngineNodesModule.CONDITION, state = NodeStepState.SUCCESS, logMessage = "GPS check disabled, skipping.")
                     onStepUpdate?.invoke(listOf(step))
                     PreconditionResult.Passed(steps = listOf(step))
                 } else {
@@ -241,7 +242,7 @@ open class PreconditionEvaluator(
                     val step = NodeExecutionStep(
                         nodeId = "gps_check",
                         nodeName = "📍 GPS / Location Check",
-                        nodeType = NodeType.HTTP_ACTION,
+                        nodeType = CoreEngineNodesModule.CONDITION,
                         state = if (isOk) NodeStepState.SUCCESS else NodeStepState.FAILED,
                         logMessage = if (isOk) "Location permissions and GPS hardware enabled" else (failReason ?: "GPS check failed"),
                         errorReason = failReason
@@ -254,7 +255,7 @@ open class PreconditionEvaluator(
                 if (precondition.isEnabled) {
                     evaluateChainCheck(precondition, onStepUpdate)
                 } else {
-                    val step = NodeExecutionStep(nodeId = "chain_check", nodeName = "⛓️ Chained Pipeline", nodeType = NodeType.HTTP_ACTION, state = NodeStepState.SUCCESS, logMessage = "Chained check disabled, skipping.")
+                    val step = NodeExecutionStep(nodeId = "chain_check", nodeName = "⛓️ Chained Pipeline", nodeType = CoreEngineNodesModule.CONDITION, state = NodeStepState.SUCCESS, logMessage = "Chained check disabled, skipping.")
                     onStepUpdate?.invoke(listOf(step))
                     PreconditionResult.Passed(steps = listOf(step))
                 }
@@ -323,17 +324,50 @@ open class PreconditionEvaluator(
         )
         var capturedSteps = emptyList<NodeExecutionStep>()
 
-        val manualTrigger = check.nodes.firstOrNull { it.type == NodeType.MANUAL_TRIGGER }
-        val triggerConfig = try { org.json.JSONObject(manualTrigger?.configJson ?: "{}") } catch (_: Exception) { org.json.JSONObject() }
-        val sampleBody = triggerConfig.optString("testBody", "{\"code\": \"849201\", \"status\": \"active\"}")
-        val sampleSender = triggerConfig.optString("testSender", "+15551234567")
+        val triggerNode = check.nodes.firstOrNull { node ->
+            val manifest = BuiltInPluginRegistry.getBuiltInManifestByTypeId(node.type)
+            manifest?.category == dev.zophop.plugin.api.NodeCategory.TRIGGER || node.type.contains("TRIGGER", ignoreCase = true) || check.connections.none { it.toNodeId == node.id }
+        }
+        val triggerConfig = try { org.json.JSONObject(triggerNode?.configJson ?: "{}") } catch (_: Exception) { org.json.JSONObject() }
 
-        val testContextMap = mutableMapOf<String, Any>(
-            "sender" to sampleSender,
-            "body" to sampleBody,
-            "http_response" to sampleBody,
-            "received_at" to System.currentTimeMillis()
-        )
+        val testContextMap = mutableMapOf<String, Any>()
+        val keys = triggerConfig.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            if (key.startsWith("test", ignoreCase = true) && key.length > 4) {
+                val contextKey = key.substring(4).replaceFirstChar { it.lowercase() }
+                val valStr = triggerConfig.optString(key, "")
+                if (valStr.isNotBlank()) {
+                    testContextMap[contextKey] = valStr
+                    if (contextKey == "body" || contextKey == "text") {
+                        testContextMap["body"] = valStr
+                        testContextMap["text"] = valStr
+                        testContextMap["message"] = valStr
+                        testContextMap["http_response"] = valStr
+                    }
+                    if (contextKey == "sender") {
+                        testContextMap["sender"] = valStr
+                        testContextMap["header"] = valStr
+                        testContextMap["address"] = valStr
+                    }
+                    if (contextKey == "packageName") {
+                        testContextMap["package_name"] = valStr
+                        testContextMap["package"] = valStr
+                    }
+                }
+            }
+        }
+
+        if (!testContextMap.containsKey("body") && !testContextMap.containsKey("text")) {
+            val sampleBody = triggerConfig.optString("testBody", "{\"code\": \"849201\", \"status\": \"active\"}")
+            testContextMap["body"] = sampleBody
+            testContextMap["text"] = sampleBody
+            testContextMap["http_response"] = sampleBody
+        }
+        if (!testContextMap.containsKey("sender")) {
+            testContextMap["sender"] = triggerConfig.optString("testSender", "+15551234567")
+        }
+        testContextMap["received_at"] = System.currentTimeMillis()
 
         val result = engine.executeWorkflowWithProgress(
             workflow = workflow,

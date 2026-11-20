@@ -18,14 +18,14 @@ class WorkflowValidationAndPipelineTest {
         val node1Obj = JSONObject().apply {
             put("id", "n_trig")
             put("name", "SMS Trigger")
-            put("type", NodeType.SMS_TRIGGER.name)
+            put("type", NodeType.SMS_TRIGGER)
             put("isEnabled", true)
             put("configJson", """{"allowlist":".*"}""")
         }
         val node2Obj = JSONObject().apply {
             put("id", "n_action")
             put("name", "HTTP Post")
-            put("type", NodeType.HTTP_ACTION.name)
+            put("type", NodeType.HTTP_ACTION)
             put("isEnabled", true)
             put("configJson", """{"url":"https://api.test/post","method":"POST"}""")
         }

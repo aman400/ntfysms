@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
@@ -40,6 +41,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FabPosition
@@ -169,18 +172,46 @@ fun PreconditionEditorScreen(
     var sheetTestSteps by remember { mutableStateOf<List<NodeExecutionStep>>(emptyList()) }
     var showTestStepperSheet by remember { mutableStateOf(false) }
 
+    val defaultTriggerId = remember { UUID.randomUUID().toString() }
+    val defaultConditionId = remember { UUID.randomUUID().toString() }
+
     var chainNodes by remember {
         mutableStateOf(
-            (precondition?.toDomain() as? Precondition.ChainCheck)?.nodes ?: emptyList()
+            (precondition?.toDomain() as? Precondition.ChainCheck)?.nodes ?: listOf(
+                WorkflowNode(
+                    id = defaultTriggerId,
+                    name = "Precondition Test Data",
+                    type = NodeType.MANUAL_TRIGGER,
+                    isEnabled = true,
+                    configJson = JSONObject().apply {
+                        put("testBody", "{\"code\": \"849201\", \"status\": \"active\"}")
+                        put("testSender", "+15551234567")
+                    }.toString()
+                ),
+                WorkflowNode(
+                    id = defaultConditionId,
+                    name = "Condition Check",
+                    type = NodeType.CONDITION,
+                    isEnabled = true,
+                    configJson = JSONObject().apply {
+                        put("variable", "status")
+                        put("operator", "EQUALS")
+                        put("value", "active")
+                    }.toString()
+                )
+            )
         )
     }
     var chainConnections by remember {
         mutableStateOf(
-            (precondition?.toDomain() as? Precondition.ChainCheck)?.connections ?: emptyList()
+            (precondition?.toDomain() as? Precondition.ChainCheck)?.connections ?: listOf(
+                WorkflowConnection(fromNodeId = defaultTriggerId, toNodeId = defaultConditionId)
+            )
         )
     }
     var editingChainNode by remember { mutableStateOf<WorkflowNode?>(null) }
     var showAddNodeDialog by remember { mutableStateOf(false) }
+    var nodePendingDeletion by remember { mutableStateOf<WorkflowNode?>(null) }
 
     var draggedChainIndex by remember { mutableStateOf<Int?>(null) }
     var dragChainOffsetY by remember { mutableFloatStateOf(0f) }
@@ -192,7 +223,7 @@ fun PreconditionEditorScreen(
                 nodesArr.put(JSONObject().apply {
                     put("id", node.id)
                     put("name", node.name)
-                    put("type", node.type.name)
+                    put("type", node.type)
                     put("isEnabled", node.isEnabled)
                     put("configJson", node.configJson)
                 })
@@ -303,13 +334,19 @@ fun PreconditionEditorScreen(
                     }.toString()
                 )
                 val restNodes = if (chainNodes.isEmpty()) {
-                    val id1 = UUID.randomUUID().toString()
-                    val id2 = UUID.randomUUID().toString()
-                    val id3 = UUID.randomUUID().toString()
+                    val condId = UUID.randomUUID().toString()
                     listOf(
-                        WorkflowNode(id = id1, name = "HTTP Request", type = NodeType.HTTP_ACTION, isEnabled = true),
-                        WorkflowNode(id = id2, name = "JSON Parser", type = NodeType.JSON_PARSER, isEnabled = true),
-                        WorkflowNode(id = id3, name = "Condition Check", type = NodeType.CONDITION, isEnabled = true)
+                        WorkflowNode(
+                            id = condId,
+                            name = "Condition Check",
+                            type = NodeType.CONDITION,
+                            isEnabled = true,
+                            configJson = JSONObject().apply {
+                                put("variable", "status")
+                                put("operator", "EQUALS")
+                                put("value", "active")
+                            }.toString()
+                        )
                     )
                 } else chainNodes
 
@@ -659,14 +696,14 @@ fun PreconditionEditorScreen(
                     )
 
                     val selectedCred = credentials.find { it.id == credentialId }
-                    val selectedCredName = selectedCred?.let { "🔑 ${it.name} (${it.type.name})" } ?: "None (Optional Auth)"
+                    val selectedCredName = selectedCred?.let { "🔑 ${it.name} (${it.type})" } ?: "None (Optional Auth)"
 
                     SearchableDropdownSelector(
                         selectedItemText = selectedCredName,
                         label = "🔑 Attach Saved Credential",
                         searchPlaceholder = "Search credentials...",
                         items = credentials,
-                        itemText = { cred -> "🔑 ${cred.name} (${cred.type.name})" },
+                        itemText = { cred -> "🔑 ${cred.name} (${cred.type})" },
                         onItemSelected = { cred ->
                             credentialId = cred?.id ?: ""
                         },
@@ -691,158 +728,178 @@ fun PreconditionEditorScreen(
                         fontWeight = FontWeight.Bold
                     )
 
-                    var chainCardHeightPx by remember { mutableFloatStateOf(100f) }
-
                     chainNodes.forEachIndexed { index, node ->
                         val isTrigger = node.type == NodeType.MANUAL_TRIGGER
-                        val isDragged = draggedChainIndex == index
-                        val dragModifier = if (isDragged) {
-                            Modifier
-                                .zIndex(10f)
-                                .graphicsLayer { translationY = dragChainOffsetY }
-                        } else Modifier
+                        val isLast = index == chainNodes.size - 1
 
-                        val dismissState = rememberSwipeToDismissBoxState(
-                            confirmValueChange = { dismissValue ->
-                                if (dismissValue == SwipeToDismissBoxValue.EndToStart) {
-                                    if (!isTrigger) {
-                                        val newNodes = chainNodes.filterNot { it.id == node.id }
-                                        chainNodes = newNodes
-                                        val newConns = mutableListOf<WorkflowConnection>()
-                                        for (i in 0 until newNodes.size - 1) {
-                                            newConns.add(WorkflowConnection(fromNodeId = newNodes[i].id, toNodeId = newNodes[i + 1].id))
+                        androidx.compose.runtime.key(node.id) {
+                            val dismissState = rememberSwipeToDismissBoxState(
+                                confirmValueChange = { dismissValue ->
+                                    if (dismissValue == SwipeToDismissBoxValue.EndToStart) {
+                                        if (!isTrigger) {
+                                            nodePendingDeletion = node
                                         }
-                                        chainConnections = newConns
-                                    }
-                                    false
-                                } else if (dismissValue == SwipeToDismissBoxValue.StartToEnd) {
-                                    editingChainNode = node
-                                    false
-                                } else false
-                            }
-                        )
-
-                        SwipeToDismissBox(
-                            state = dismissState,
-                            backgroundContent = {
-                                val direction = dismissState.dismissDirection
-                                val color = when {
-                                    direction == SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.secondaryContainer
-                                    direction == SwipeToDismissBoxValue.EndToStart && !isTrigger -> MaterialTheme.colorScheme.errorContainer
-                                    else -> Color.Transparent
+                                        false
+                                    } else if (dismissValue == SwipeToDismissBoxValue.StartToEnd) {
+                                        editingChainNode = node
+                                        false
+                                    } else false
                                 }
-                                val alignment = if (direction == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd
-                                val icon = if (direction == SwipeToDismissBoxValue.StartToEnd) Icons.Default.Edit else Icons.Default.Delete
-                                val text = if (direction == SwipeToDismissBoxValue.StartToEnd) "Edit" else "Delete"
-                                val tint = if (direction == SwipeToDismissBoxValue.StartToEnd) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer
+                            )
 
-                                if (direction != SwipeToDismissBoxValue.EndToStart || !isTrigger) {
-                                    Box(
+                            SwipeToDismissBox(
+                                state = dismissState,
+                                enableDismissFromStartToEnd = true,
+                                enableDismissFromEndToStart = !isTrigger,
+                                backgroundContent = {
+                                    val direction = dismissState.dismissDirection
+                                    val color = when {
+                                        direction == SwipeToDismissBoxValue.StartToEnd -> MaterialTheme.colorScheme.secondaryContainer
+                                        direction == SwipeToDismissBoxValue.EndToStart && !isTrigger -> MaterialTheme.colorScheme.errorContainer
+                                        else -> Color.Transparent
+                                    }
+                                    val alignment = if (direction == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd
+                                    val icon = if (direction == SwipeToDismissBoxValue.StartToEnd) Icons.Default.Edit else Icons.Default.Delete
+                                    val text = if (direction == SwipeToDismissBoxValue.StartToEnd) "Edit" else "Delete"
+                                    val tint = if (direction == SwipeToDismissBoxValue.StartToEnd) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onErrorContainer
+
+                                    if (direction != SwipeToDismissBoxValue.Settled) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(color, shape = RoundedCornerShape(16.dp))
+                                                .padding(horizontal = 24.dp),
+                                            contentAlignment = alignment
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                Icon(imageVector = icon, contentDescription = text, tint = tint, modifier = Modifier.size(18.dp))
+                                                Text(text = text, color = tint, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                            }
+                                        }
+                                    }
+                                }
+                            ) {
+                                OutlinedCard(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable(enabled = !isTestingSheet, onClick = { editingChainNode = node }),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.outlinedCardColors(
+                                        containerColor = MaterialTheme.colorScheme.surface
+                                    ),
+                                    elevation = CardDefaults.outlinedCardElevation(defaultElevation = 2.dp)
+                                ) {
+                                    Row(
                                         modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(color, shape = RoundedCornerShape(16.dp))
-                                            .padding(horizontal = 24.dp),
-                                        contentAlignment = alignment
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                            modifier = Modifier.weight(1f)
                                         ) {
-                                            Icon(imageVector = icon, contentDescription = text, tint = tint, modifier = Modifier.size(18.dp))
-                                            Text(text = text, color = tint, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                        }
-                                    }
-                                }
-                            }
-                        ) {
-                            OutlinedCard(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .then(dragModifier)
-                                    .onGloballyPositioned { layoutCoordinates ->
-                                        if (layoutCoordinates.size.height > 0) {
-                                            chainCardHeightPx = layoutCoordinates.size.height.toFloat()
-                                        }
-                                    }
-                                    .clickable(enabled = !isTestingSheet, onClick = { editingChainNode = node }),
-                                shape = RoundedCornerShape(16.dp),
-                                colors = CardDefaults.outlinedCardColors(
-                                    containerColor = if (isDragged) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surface
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        if (!isTrigger) {
                                             Icon(
-                                                imageVector = Icons.Default.DragHandle,
-                                                contentDescription = "Drag to reorder",
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier
-                                                    .size(20.dp)
-                                                    .pointerInput(index, chainNodes.size) {
-                                                        if (!isTestingSheet) {
-                                                            detectDragGesturesAfterLongPress(
-                                                                onDragStart = {
-                                                                    draggedChainIndex = index
-                                                                    dragChainOffsetY = 0f
-                                                                },
-                                                                onDrag = { change, dragAmount ->
-                                                                    change.consume()
-                                                                    dragChainOffsetY += dragAmount.y
-                                                                    val curIdx = draggedChainIndex ?: return@detectDragGesturesAfterLongPress
-                                                                    val threshold = (chainCardHeightPx * 0.5f).coerceAtLeast(40f)
-
-                                                                    if (dragChainOffsetY > threshold && curIdx < chainNodes.size - 1) {
-                                                                        reorderChainNodes(curIdx, curIdx + 1)
-                                                                        draggedChainIndex = curIdx + 1
-                                                                        dragChainOffsetY -= chainCardHeightPx
-                                                                    } else if (dragChainOffsetY < -threshold && curIdx > 1) {
-                                                                        reorderChainNodes(curIdx, curIdx - 1)
-                                                                        draggedChainIndex = curIdx - 1
-                                                                        dragChainOffsetY += chainCardHeightPx
-                                                                    }
-                                                                },
-                                                                onDragEnd = {
-                                                                    draggedChainIndex = null
-                                                                    dragChainOffsetY = 0f
-                                                                },
-                                                                onDragCancel = {
-                                                                    draggedChainIndex = null
-                                                                    dragChainOffsetY = 0f
-                                                                }
-                                                            )
-                                                        }
-                                                    }
+                                                imageVector = WorkflowUiHelper.getNodeIcon(node.type),
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(22.dp)
                                             )
+                                            Column {
+                                                Text(
+                                                    text = "${index + 1}. ${node.name}",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Text(
+                                                    text = if (isTrigger) "Fixed Entry Point" else WorkflowUiHelper.getNodeTitle(node.type),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontSize = 11.sp
+                                                )
+                                            }
                                         }
-                                        Icon(
-                                            imageVector = WorkflowUiHelper.getNodeIcon(node.type),
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Column {
-                                            Text(
-                                                text = "${index + 1}. ${node.name}",
-                                                style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = if (isTrigger) "Fixed Entry Point" else WorkflowUiHelper.getNodeTitle(node.type),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                fontSize = 10.sp
-                                            )
+
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            IconButton(
+                                                onClick = { editingChainNode = node },
+                                                enabled = !isTestingSheet,
+                                                modifier = Modifier.size(32.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Edit,
+                                                    contentDescription = "Edit Step",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+
+                                            if (!isTrigger) {
+                                                var showMenu by remember { mutableStateOf(false) }
+                                                Box {
+                                                    IconButton(
+                                                        onClick = { showMenu = true },
+                                                        enabled = !isTestingSheet,
+                                                        modifier = Modifier.size(28.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.MoreVert,
+                                                            contentDescription = "Options",
+                                                            modifier = Modifier.size(18.dp),
+                                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                                        )
+                                                    }
+                                                    DropdownMenu(
+                                                        expanded = showMenu,
+                                                        onDismissRequest = { showMenu = false }
+                                                    ) {
+                                                        DropdownMenuItem(
+                                                            text = { Text("Edit Step") },
+                                                            onClick = {
+                                                                showMenu = false
+                                                                editingChainNode = node
+                                                            },
+                                                            enabled = !isTestingSheet,
+                                                            leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
+                                                        )
+                                                        DropdownMenuItem(
+                                                            text = { Text("Move Up") },
+                                                            onClick = {
+                                                                showMenu = false
+                                                                if (index > 1) reorderChainNodes(index, index - 1)
+                                                            },
+                                                            enabled = !isTestingSheet && index > 1,
+                                                            leadingIcon = { Icon(Icons.Default.KeyboardArrowUp, contentDescription = null) }
+                                                        )
+                                                        DropdownMenuItem(
+                                                            text = { Text("Move Down") },
+                                                            onClick = {
+                                                                showMenu = false
+                                                                if (!isLast) reorderChainNodes(index, index + 1)
+                                                            },
+                                                            enabled = !isTestingSheet && !isLast,
+                                                            leadingIcon = { Icon(Icons.Default.KeyboardArrowDown, contentDescription = null) }
+                                                        )
+                                                        DropdownMenuItem(
+                                                            text = { Text("Delete Step") },
+                                                            onClick = {
+                                                                showMenu = false
+                                                                nodePendingDeletion = node
+                                                            },
+                                                            enabled = !isTestingSheet,
+                                                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) }
+                                                        )
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -943,13 +1000,13 @@ fun PreconditionEditorScreen(
                     if (addedSteps.isNotEmpty()) {
                         Text("• Added Pipeline Steps (${addedSteps.size}):", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                         addedSteps.forEach {
-                            Text("  + ${it.name} [${it.type.name}]", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                            Text("  + ${it.name} [${it.type}]", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
                         }
                     }
                     if (removedSteps.isNotEmpty()) {
                         Text("• Removed Pipeline Steps (${removedSteps.size}):", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
                         removedSteps.forEach {
-                            Text("  - ${it.name} [${it.type.name}]", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
+                            Text("  - ${it.name} [${it.type}]", fontFamily = FontFamily.Monospace, fontSize = 11.sp)
                         }
                     }
                 }
@@ -1084,239 +1141,34 @@ fun PreconditionEditorScreen(
             }
         )
     }
-}
 
-@Composable
-fun FailurePolicyAccordion(
-    onFailureAction: String,
-    onFailureActionChanged: (String) -> Unit,
-    maxRetries: String,
-    onMaxRetriesChanged: (String) -> Unit,
-    retryIntervalSeconds: String,
-    onRetryIntervalSecondsChanged: (String) -> Unit,
-    showNotificationOnFailure: Boolean,
-    onShowNotificationOnFailureChanged: (Boolean) -> Unit,
-    onShowNotificationRationale: () -> Unit = {}
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    OutlinedCard(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f)
+    nodePendingDeletion?.let { nodeToDelete ->
+        AlertDialog(
+            onDismissRequest = { nodePendingDeletion = null },
+            title = { Text("Delete Pipeline Step") },
+            text = { Text("Are you sure you want to delete '${nodeToDelete.name}'? This action cannot be undone.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val newNodes = chainNodes.filterNot { it.id == nodeToDelete.id }
+                        chainNodes = newNodes
+                        val newConns = mutableListOf<WorkflowConnection>()
+                        for (i in 0 until newNodes.size - 1) {
+                            newConns.add(WorkflowConnection(fromNodeId = newNodes[i].id, toNodeId = newNodes[i + 1].id))
+                        }
+                        chainConnections = newConns
+                        nodePendingDeletion = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Column {
-                        Text(
-                            text = "Failure & Retry Policy",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        val actionDesc = if (onFailureAction == "RETRY") "Wait & Retry ($maxRetries attempts)" else "Fail Immediately"
-                        Text(
-                            text = if (expanded) "Configure retry attempts and failure response" else actionDesc,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text("Delete")
                 }
-                IconButton(onClick = { expanded = !expanded }) {
-                    Icon(
-                        imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                        contentDescription = if (expanded) "Collapse" else "Expand"
-                    )
+            },
+            dismissButton = {
+                TextButton(onClick = { nodePendingDeletion = null }) {
+                    Text("Cancel")
                 }
             }
-
-            if (expanded) {
-                Spacer(modifier = Modifier.height(4.dp))
-                FailurePolicyCard(
-                    onFailureAction = onFailureAction,
-                    onFailureActionChanged = onFailureActionChanged,
-                    maxRetries = maxRetries,
-                    onMaxRetriesChanged = onMaxRetriesChanged,
-                    retryIntervalSeconds = retryIntervalSeconds,
-                    onRetryIntervalSecondsChanged = onRetryIntervalSecondsChanged,
-                    showNotificationOnFailure = showNotificationOnFailure,
-                    onShowNotificationOnFailureChanged = onShowNotificationOnFailureChanged,
-                    onShowNotificationRationale = onShowNotificationRationale
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun AddChainNodeDialog(
-    onDismiss: () -> Unit,
-    onSelectType: (NodeType) -> Unit
-) {
-    val extractionNodes = listOf(
-        NodeType.JSON_PARSER,
-        NodeType.REGEX_PARSER,
-        NodeType.TEMPLATE_FORMATTER,
-        NodeType.PARSE_NOTIFICATION
-    )
-
-    val logicNodes = listOf(
-        NodeType.CONDITION
-    )
-
-    val actionNodes = listOf(
-        NodeType.HTTP_ACTION,
-        NodeType.NTFY_ACTION,
-        NodeType.GOTIFY_ACTION,
-        NodeType.SEND_NOTIFICATION_ACTION,
-        NodeType.SEND_SMS_ACTION
-    )
-
-    NoSwipeBottomSheet(
-        onDismissRequest = onDismiss
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 16.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp, bottom = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Select Pipeline Step Node",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Close")
-                }
-            }
-
-            Column(
-                modifier = Modifier
-                    .weight(1f, fill = false)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Extraction & Parsing",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                extractionNodes.forEach { type ->
-                    NodeSelectionCard(type = type, onClick = { onSelectType(type) })
-                }
-
-                Text(
-                    text = "Logic & Filtering",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                logicNodes.forEach { type ->
-                    NodeSelectionCard(type = type, onClick = { onSelectType(type) })
-                }
-
-                Text(
-                    text = "Actions & Delivery",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                actionNodes.forEach { type ->
-                    NodeSelectionCard(type = type, onClick = { onSelectType(type) })
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun NodeSelectionCard(
-    type: NodeType,
-    onClick: () -> Unit
-) {
-    OutlinedCard(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.outlinedCardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Icon(
-                imageVector = WorkflowUiHelper.getNodeIcon(type),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Column {
-                Text(
-                    text = WorkflowUiHelper.getNodeTitle(type),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = WorkflowUiHelper.getNodeDescription(type),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-/**
- * Modal Bottom Sheet container wrapper for creating or editing Precondition entities.
- */
-@Composable
-fun PreconditionBottomSheet(
-    precondition: PreconditionEntity?,
-    credentials: List<Credential> = emptyList(),
-    onTestPreconditionWithProgress: ((PreconditionEntity, (List<NodeExecutionStep>) -> Unit, (PreconditionResult) -> Unit) -> Unit)? = null,
-    onDismiss: () -> Unit,
-    onSave: (PreconditionEntity) -> Unit
-) {
-    NoSwipeBottomSheet(
-        onDismissRequest = onDismiss
-    ) {
-        PreconditionEditorScreen(
-            precondition = precondition,
-            credentials = credentials,
-            onTestPreconditionWithProgress = onTestPreconditionWithProgress,
-            onDismiss = onDismiss,
-            onSave = onSave
         )
     }
 }

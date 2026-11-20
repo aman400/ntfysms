@@ -29,13 +29,17 @@ object AppListHelper {
             emptyList()
         }
 
+        val selfPkg = context.packageName
         val apps = resolveInfos.map { info ->
             InstalledAppInfo(
                 appName = info.loadLabel(pm).toString(),
                 packageName = info.activityInfo.packageName,
                 icon = try { info.loadIcon(pm) } catch (_: Exception) { null }
             )
-        }.distinctBy { it.packageName }.sortedBy { it.appName }
+        }
+            .distinctBy { it.packageName }
+            .filter { it.packageName != selfPkg && !it.packageName.startsWith("dev.zophop") }
+            .sortedBy { it.appName }
 
         return listOf(InstalledAppInfo("All Apps (*)", ".*", null)) + apps
     }

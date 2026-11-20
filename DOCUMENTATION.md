@@ -340,23 +340,20 @@ Plugin apps request and manage their own Android runtime permissions independent
 
 ---
 
-### Complete Sample Plugin Implementation: Incoming Call Handler Plugin
+### Complete Sample Plugin Implementation: Telegram Bot Action Plugin
 
-Below is a complete, copy-pasteable example of building an **Incoming Call Trigger & Auto-Action Plugin**:
+Below is a complete, copy-pasteable example of building a **Telegram Bot Action Plugin** that forwards workflow payloads and notifications to a Telegram Chat via Bot API:
 
 #### 1. Plugin `AndroidManifest.xml`
 ```xml
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.callplugin">
+    package="com.example.telegramplugin">
 
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <uses-permission android:name="android.permission.READ_CALL_LOG" />
-    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
-    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.INTERNET" />
 
-    <application android:label="ZopHop Call Trigger Plugin">
+    <application android:label="ZopHop Telegram Action Plugin">
         <service
-            android:name=".CallNodePluginService"
+            android:name=".TelegramNodePluginService"
             android:exported="true">
             <intent-filter>
                 <action android:name="dev.zophop.plugin.ACTION_NODE_SERVICE" />
@@ -366,21 +363,24 @@ Below is a complete, copy-pasteable example of building an **Incoming Call Trigg
 </manifest>
 ```
 
-#### 2. Plugin Service (`CallNodePluginService.kt`)
+#### 2. Plugin Service (`TelegramNodePluginService.kt`)
 ```kotlin
-package com.example.callplugin
+package com.example.telegramplugin
 
 import android.app.Service
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.IBinder
-import android.telephony.SmsManager
-import android.telephony.TelecomManager
 import dev.zophop.plugin.api.INodePluginService
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 
-class CallNodePluginService : Service() {
+class TelegramNodePluginService : Service() {
+
+    private val client = OkHttpClient()
 
     private val binder = object : INodePluginService.Stub() {
 
@@ -389,35 +389,33 @@ class CallNodePluginService : Service() {
         override fun getManifestJson(): String {
             val schema = JSONArray().apply {
                 put(JSONObject().apply {
-                    put("key", "actionType")
-                    put("label", "Action Type")
-                    put("type", "DROPDOWN")
-                    put("tooltip", "Choose action when an incoming call matches filter")
-                    put("options", JSONArray().apply {
-                        put(JSONObject().apply { put("value", "AUTO_SMS"); put("label", "Send SMS Auto-Reply") })
-                        put(JSONObject().apply { put("value", "DISCONNECT"); put("label", "Reject / Disconnect Call") })
-                    })
-                })
-                put(JSONObject().apply {
-                    put("key", "callerRegex")
-                    put("label", "Caller Number Regex Filter")
+                    put("key", "botToken")
+                    put("label", "Telegram Bot Token")
                     put("type", "TEXT")
-                    put("tooltip", "Regex pattern matching caller phone numbers (e.g. .*555.*)")
+                    put("tooltip", "Bot token provided by @BotFather")
+                    put("singleLine", true)
                 })
                 put(JSONObject().apply {
-                    put("key", "smsTemplate")
-                    put("label", "SMS Auto-Reply Template")
+                    put("key", "chatId")
+                    put("label", "Telegram Chat ID")
+                    put("type", "TEXT")
+                    put("tooltip", "Target Chat ID or Channel username (e.g. -100123456789)")
+                    put("singleLine", true)
+                })
+                put(JSONObject().apply {
+                    put("key", "messageTemplate")
+                    put("label", "Message Template")
                     put("type", "TEMPLATE")
-                    put("tooltip", "Auto-reply text template sent to incoming caller")
+                    put("tooltip", "Message body template (supports \${body}, \${sender}, etc.)")
                     put("minLines", 3)
                 })
             }
 
             val manifest = JSONObject().apply {
-                put("typeId", "com.example.callplugin.CALL_TRIGGER_ACTION")
-                put("displayName", "Incoming Call Handler")
-                put("description", "Parses incoming caller number, sends auto-reply SMS, or disconnects call")
-                put("category", "TRIGGER")
+                put("typeId", "com.example.telegramplugin.TELEGRAM_ACTION")
+                put("displayName", "Telegram Notification")
+                put("description", "Sends formatted notifications and alerts to a Telegram chat via Bot API")
+                put("category", "ACTION")
                 put("apiVersion", 1)
                 put("configSchema", schema)
             }
@@ -429,73 +427,56 @@ class CallNodePluginService : Service() {
             val config = try { JSONObject(configJson) } catch (_: Exception) { JSONObject() }
             val inputCtx = try { JSONObject(inputContextJson) } catch (_: Exception) { JSONObject() }
 
-            val actionType = config.optString("actionType", "AUTO_SMS")
-            val callerRegex = config.optString("callerRegex", ".*")
-            val smsTemplate = config.optString("smsTemplate", "I'm currently busy and will call you back soon.")
+            val botToken = config.optString("botToken", "").trim()
+            val chatId = config.optString("chatId", "").trim()
+            val template = config.optString("messageTemplate", "\${body}").ifEmpty { "\${body}" }
 
-            val callerNumber = inputCtx.optString("caller_number", inputCtx.optString("sender", ""))
-
-            // 1. Permission Check in Plugin App
-            val hasPhonePermission = checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
-            if (!hasPhonePermission) {
+            if (botToken.isBlank() || chatId.isBlank()) {
                 return JSONObject().apply {
                     put("isSuccess", false)
-                    put("errorReason", "READ_PHONE_STATE permission not granted in Call Plugin App")
+                    put("errorReason", "Telegram botToken or chatId is empty")
                 }.toString()
             }
 
-            // 2. Filter Caller Number
-            val matches = java.util.regex.Pattern.compile(callerRegex).matcher(callerNumber).find()
-            if (!matches) {
-                return JSONObject().apply {
-                    put("isSuccess", false)
-                    put("errorReason", "Caller number '$callerNumber' did not match filter regex '$callerRegex'")
-                }.toString()
+            // Simple variable interpolation
+            var message = template
+            val keys = inputCtx.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                val value = inputCtx.optString(key, "")
+                message = message.replace("\${$key}", value).replace("{$key}", value)
             }
 
-            // 3. Execute Action Logic
-            val outputMap = JSONObject()
-            outputMap.put("caller_number", callerNumber)
+            val url = "https://api.telegram.org/bot$botToken/sendMessage"
+            val jsonBody = JSONObject().apply {
+                put("chat_id", chatId)
+                put("text", message)
+                put("parse_mode", "Markdown")
+            }
 
-            return when (actionType) {
-                "AUTO_SMS" -> {
-                    val hasSmsPermission = checkSelfPermission(android.Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED
-                    if (!hasSmsPermission) {
-                        return JSONObject().apply {
-                            put("isSuccess", false)
-                            put("errorReason", "SEND_SMS permission not granted in Call Plugin App")
-                        }.toString()
-                    }
-                    SmsManager.getDefault().sendTextMessage(callerNumber, null, smsTemplate, null, null)
-                    outputMap.put("sms_status", "SENT")
+            val requestBody = jsonBody.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
+            val request = Request.Builder().url(url).post(requestBody).build()
 
+            return try {
+                val response = client.newCall(request).execute()
+                val responseBody = response.body?.string() ?: ""
+                if (response.isSuccessful) {
                     JSONObject().apply {
                         put("isSuccess", true)
                         put("outputPort", "main")
-                        put("logMessage", "Auto-reply SMS sent to caller '$callerNumber'")
-                        put("outputDataMap", outputMap)
+                        put("logMessage", "Telegram message successfully sent to chat $chatId")
                     }.toString()
-                }
-                "DISCONNECT" -> {
-                    val telecomManager = getSystemService(TELECOM_SERVICE) as TelecomManager
-                    val endSuccess = try { telecomManager.endCall(); true } catch (_: Exception) { false }
-                    outputMap.put("call_status", if (endSuccess) "DISCONNECTED" else "FAILED")
-
+                } else {
                     JSONObject().apply {
-                        put("isSuccess", endSuccess)
-                        put("outputPort", "main")
-                        put("logMessage", if (endSuccess) "Disconnected incoming call from '$callerNumber'" else "Failed to end call")
-                        put("outputDataMap", outputMap)
+                        put("isSuccess", false)
+                        put("errorReason", "Telegram API error (${response.code}): $responseBody")
                     }.toString()
                 }
-                else -> {
-                    JSONObject().apply {
-                        put("isSuccess", true)
-                        put("outputPort", "main")
-                        put("logMessage", "Caller '$callerNumber' processed")
-                        put("outputDataMap", outputMap)
-                    }.toString()
-                }
+            } catch (e: Exception) {
+                JSONObject().apply {
+                    put("isSuccess", false)
+                    put("errorReason", "Telegram request exception: ${e.message}")
+                }.toString()
             }
         }
     }

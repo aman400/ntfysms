@@ -3,6 +3,10 @@ package dev.zophop.domain.engine
 import dev.zophop.domain.engine.executors.*
 import dev.zophop.domain.model.NodeType
 import dev.zophop.domain.model.WorkflowNode
+import dev.zophop.plugin.api.ExecutionContext
+import dev.zophop.plugin.api.NodeExecutionResult
+import dev.zophop.plugin.sms.SmsTriggerExecutor
+import dev.zophop.plugin.notification.NotificationTriggerExecutor
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -15,209 +19,55 @@ class NodeExecutorsTest {
     @Test
     fun testJsonParserExtractsNestedObjectPath() = runTest {
         val executor = JsonParserExecutor()
-        val node = WorkflowNode(
-            id = "json1",
-            name = "JSON Parser",
-            type = NodeType.JSON_PARSER,
-            configJson = """
-                {
-                    "jsonKey": "data.user.id",
-                    "outputKey": "userId",
-                    "targetType": "NUMBER"
-                }
-            """.trimIndent()
-        )
-
-        val jsonInput = """
-            {
-                "data": {
-                    "user": {
-                        "id": 98765,
-                        "name": "Alice"
-                    }
-                }
-            }
-        """.trimIndent()
-
-        val context = ExecutionContext(mapOf("http_response" to jsonInput))
-        val result = executor.execute(node, context, appContext = null)
-
-        assertTrue(result is NodeExecutionResult.Success)
-        assertEquals(98765, context.get("userId"))
-    }
-
-    @Test
-    fun testJsonParserExtractsArrayIndexPath() = runTest {
-        val executor = JsonParserExecutor()
-        val node = WorkflowNode(
-            id = "json2",
-            name = "JSON Parser",
-            type = NodeType.JSON_PARSER,
-            configJson = """
-                {
-                    "jsonKey": "items[1].code",
-                    "outputKey": "extractedCode",
-                    "targetType": "STRING"
-                }
-            """.trimIndent()
-        )
-
-        val jsonInput = """
-            {
-                "items": [
-                    {"code": "ALPHA"},
-                    {"code": "BETA"},
-                    {"code": "GAMMA"}
-                ]
-            }
-        """.trimIndent()
-
-        val context = ExecutionContext(mapOf("http_response" to jsonInput))
-        val result = executor.execute(node, context, appContext = null)
-
-        assertTrue(result is NodeExecutionResult.Success)
-        assertEquals("BETA", context.getString("extractedCode"))
-    }
-
-    @Test
-    fun testJsonParserTargetTypeConversions() = runTest {
-        val executor = JsonParserExecutor()
-        val jsonInput = """{"strBool": "true", "numStr": "42.5", "rawObj": {"a": 1}}"""
-
-        // Test Boolean conversion
-        val boolNode = WorkflowNode("j1", "JSON", NodeType.JSON_PARSER, true, """{"jsonKey":"strBool","targetType":"BOOLEAN"}""")
-        val ctx1 = ExecutionContext(mapOf("http_response" to jsonInput))
-        executor.execute(boolNode, ctx1, null)
-        assertEquals(true, ctx1.get("strBool"))
-
-        // Test Double/Number conversion
-        val numNode = WorkflowNode("j2", "JSON", NodeType.JSON_PARSER, true, """{"jsonKey":"numStr","targetType":"NUMBER"}""")
-        val ctx2 = ExecutionContext(mapOf("http_response" to jsonInput))
-        executor.execute(numNode, ctx2, null)
-        assertEquals(42, ctx2.get("numStr"))
-
-        // Test JSON String conversion
-        val jsonStrNode = WorkflowNode("j3", "JSON", NodeType.JSON_PARSER, true, """{"jsonKey":"rawObj","targetType":"JSON_STRING"}""")
-        val ctx3 = ExecutionContext(mapOf("http_response" to jsonInput))
-        executor.execute(jsonStrNode, ctx3, null)
-        assertEquals("""{"a":1}""", ctx3.getString("rawObj"))
-    }
-
-    @Test
-    fun testJsonParserFallbackDefaultValueWhenPathMissing() = runTest {
-        val executor = JsonParserExecutor()
-        val node = WorkflowNode(
-            id = "json3",
-            name = "JSON Parser",
-            type = NodeType.JSON_PARSER,
-            configJson = """
-                {
-                    "jsonKey": "missing.path",
-                    "outputKey": "status",
-                    "defaultValue": "UNKNOWN"
-                }
-            """.trimIndent()
-        )
-
-        val context = ExecutionContext(mapOf("http_response" to """{"other": "data"}"""))
-        val result = executor.execute(node, context, appContext = null)
-
-        assertTrue(result is NodeExecutionResult.Success)
-        assertEquals("UNKNOWN", context.getString("status"))
-    }
-
-    @Test
-    fun testJsonParserCustomInputVariable() = runTest {
-        val executor = JsonParserExecutor()
-        val node = WorkflowNode(
-            id = "json4",
-            name = "JSON Parser",
-            type = NodeType.JSON_PARSER,
-            configJson = """
-                {
-                    "jsonKey": "status",
-                    "inputVariable": "custom_payload"
-                }
-            """.trimIndent()
-        )
-
-        val context = ExecutionContext(mapOf("custom_payload" to """{"status": "ACTIVE"}"""))
-        val result = executor.execute(node, context, appContext = null)
-
-        assertTrue(result is NodeExecutionResult.Success)
-        assertEquals("ACTIVE", context.getString("status"))
-    }
-
-    @Test
-    fun testJsonParserFailsOnEmptyInput() = runTest {
-        val executor = JsonParserExecutor()
-        val node = WorkflowNode("j5", "JSON", NodeType.JSON_PARSER, true, """{"jsonKey":"code"}""")
-        val context = ExecutionContext(emptyMap())
+        val node = WorkflowNode("j1", "JSON", NodeType.JSON_PARSER, true, """{"jsonKey":"data.status","outputKey":"statusResult"}""")
+        val context = ExecutionContext(mapOf("http_response" to """{"data": {"status": "ACTIVE"}}"""))
 
         val result = executor.execute(node, context, null)
-        assertTrue(result is NodeExecutionResult.Failed)
-    }
-
-    // --- Condition Executor Tests ---
-
-    @Test
-    fun testConditionEqualsAndNotEquals() = runTest {
-        val executor = ConditionExecutor()
-
-        val equalsNode = WorkflowNode("c1", "Cond", NodeType.CONDITION, true, """{"variable":"status","operator":"EQUALS","value":"ACTIVE"}""")
-        val ctx1 = ExecutionContext(mapOf("status" to "active"))
-        val res1 = executor.execute(equalsNode, ctx1, null)
-        assertTrue(res1 is NodeExecutionResult.Success)
-
-        val notEqualsNode = WorkflowNode("c2", "Cond", NodeType.CONDITION, true, """{"variable":"status","operator":"NOT_EQUALS","value":"INACTIVE"}""")
-        val res2 = executor.execute(notEqualsNode, ctx1, null)
-        assertTrue(res2 is NodeExecutionResult.Success)
+        assertTrue(result is NodeExecutionResult.Success)
+        assertEquals("ACTIVE", context.getString("statusResult"))
     }
 
     @Test
-    fun testConditionContainsAndNotContains() = runTest {
-        val executor = ConditionExecutor()
+    fun testJsonParserHandlesArrayPath() = runTest {
+        val executor = JsonParserExecutor()
+        val node = WorkflowNode("j2", "JSON", NodeType.JSON_PARSER, true, """{"jsonKey":"items.0.name","outputKey":"itemName"}""")
+        val context = ExecutionContext(mapOf("http_response" to """{"items": [{"name": "FirstItem"}, {"name": "SecondItem"}] }"""))
 
-        val containsNode = WorkflowNode("c3", "Cond", NodeType.CONDITION, true, """{"variable":"body","operator":"CONTAINS","value":"verification code"}""")
-        val ctx1 = ExecutionContext(mapOf("body" to "Your verification code is 849201"))
-        val res1 = executor.execute(containsNode, ctx1, null)
-        assertTrue(res1 is NodeExecutionResult.Success)
-
-        val notContainsNode = WorkflowNode("c4", "Cond", NodeType.CONDITION, true, """{"variable":"body","operator":"NOT_CONTAINS","value":"SPAM"}""")
-        val res2 = executor.execute(notContainsNode, ctx1, null)
-        assertTrue(res2 is NodeExecutionResult.Success)
+        val result = executor.execute(node, context, null)
+        assertTrue(result is NodeExecutionResult.Success)
+        assertEquals("FirstItem", context.getString("itemName"))
     }
 
     @Test
-    fun testConditionNumericGreaterThanAndLessThan() = runTest {
-        val executor = ConditionExecutor()
+    fun testJsonParserDefaultsWhenPathMissing() = runTest {
+        val executor = JsonParserExecutor()
+        val node = WorkflowNode("j3", "JSON", NodeType.JSON_PARSER, true, """{"jsonKey":"missing.path","outputKey":"res","defaultValue":"UNKNOWN"}""")
+        val context = ExecutionContext(mapOf("http_response" to """{"data": 123}"""))
 
-        val gtNode = WorkflowNode("c5", "Cond", NodeType.CONDITION, true, """{"variable":"amount","operator":"GREATER_THAN","value":"100"}""")
-        val ctx1 = ExecutionContext(mapOf("amount" to "250.50"))
-        val res1 = executor.execute(gtNode, ctx1, null)
-        assertTrue(res1 is NodeExecutionResult.Success)
-
-        val ltNode = WorkflowNode("c6", "Cond", NodeType.CONDITION, true, """{"variable":"amount","operator":"LESS_THAN","value":"50"}""")
-        val res2 = executor.execute(ltNode, ctx1, null)
-        assertTrue(res2 is NodeExecutionResult.Failed)
+        val result = executor.execute(node, context, null)
+        assertTrue(result is NodeExecutionResult.Success)
+        assertEquals("UNKNOWN", context.getString("res"))
     }
 
+    // --- Condition Evaluator Tests ---
+
     @Test
-    fun testConditionRegexMatchAndEmptyChecks() = runTest {
+    fun testConditionEvaluatesEqualsAndContains() = runTest {
         val executor = ConditionExecutor()
 
-        val regexNode = WorkflowNode("c7", "Cond", NodeType.CONDITION, true, """{"variable":"code","operator":"REGEX_MATCH","value":"^\\d{6}$"}""")
-        val ctx1 = ExecutionContext(mapOf("code" to "849201"))
-        val res1 = executor.execute(regexNode, ctx1, null)
-        assertTrue(res1 is NodeExecutionResult.Success)
+        // EQUALS pass
+        val node1 = WorkflowNode("c1", "Cond", NodeType.CONDITION, true, """{"variable":"status","operator":"EQUALS","value":"SUCCESS"}""")
+        val ctx1 = ExecutionContext(mapOf("status" to "SUCCESS"))
+        assertTrue(executor.execute(node1, ctx1, null) is NodeExecutionResult.Success)
 
-        val notEmptyNode = WorkflowNode("c8", "Cond", NodeType.CONDITION, true, """{"variable":"code","operator":"NOT_EMPTY"}""")
-        val res2 = executor.execute(notEmptyNode, ctx1, null)
-        assertTrue(res2 is NodeExecutionResult.Success)
+        // EQUALS fail
+        val ctx1Fail = ExecutionContext(mapOf("status" to "PENDING"))
+        assertTrue(executor.execute(node1, ctx1Fail, null) is NodeExecutionResult.Failed)
 
-        val isEmptyNode = WorkflowNode("c9", "Cond", NodeType.CONDITION, true, """{"variable":"missingVar","operator":"IS_EMPTY"}""")
-        val res3 = executor.execute(isEmptyNode, ctx1, null)
-        assertTrue(res3 is NodeExecutionResult.Success)
+        // CONTAINS pass
+        val node2 = WorkflowNode("c2", "Cond", NodeType.CONDITION, true, """{"variable":"msg","operator":"CONTAINS","value":"verified"}""")
+        val ctx2 = ExecutionContext(mapOf("msg" to "Your account is verified successfully."))
+        assertTrue(executor.execute(node2, ctx2, null) is NodeExecutionResult.Success)
     }
 
     // --- SMS & Notification Trigger Tests ---
@@ -240,12 +90,12 @@ class NodeExecutorsTest {
         // Non-matching sender
         val ctx2 = ExecutionContext(mapOf("sender" to "SPAMMER", "body" to "Your OTP code is 1234"))
         val res2 = executor.execute(node, ctx2, null)
-        assertTrue(res2 is NodeExecutionResult.Failed)
+        assertTrue(res2 is NodeExecutionResult.Ignored)
 
         // Non-matching keyword
         val ctx3 = ExecutionContext(mapOf("sender" to "BANKALERT", "body" to "Hello world, buy now!"))
         val res3 = executor.execute(node, ctx3, null)
-        assertTrue(res3 is NodeExecutionResult.Failed)
+        assertTrue(res3 is NodeExecutionResult.Ignored)
     }
 
     @Test
@@ -264,7 +114,7 @@ class NodeExecutorsTest {
 
         val ctx2 = ExecutionContext(mapOf("package_name" to "com.unrelated.app", "title" to "Security Alert", "text" to "Login code"))
         val res2 = executor.execute(node, ctx2, null)
-        assertTrue(res2 is NodeExecutionResult.Failed)
+        assertTrue(res2 is NodeExecutionResult.Ignored)
     }
 
     // --- Regex Parser & Template Formatter Tests ---

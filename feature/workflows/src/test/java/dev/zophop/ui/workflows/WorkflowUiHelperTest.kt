@@ -10,7 +10,13 @@ class WorkflowUiHelperTest {
 
     @Test
     fun testNodeTitlesAndDescriptions() {
-        NodeType.values().forEach { type ->
+        listOf(
+            NodeType.SMS_TRIGGER, NodeType.NOTIFICATION_TRIGGER, NodeType.MANUAL_TRIGGER,
+            NodeType.PARSE_NOTIFICATION, NodeType.REGEX_PARSER, NodeType.JSON_PARSER,
+            NodeType.TEMPLATE_FORMATTER, NodeType.CONDITION, NodeType.NTFY_ACTION,
+            NodeType.GOTIFY_ACTION, NodeType.HTTP_ACTION, NodeType.SEND_NOTIFICATION_ACTION,
+            NodeType.SEND_SMS_ACTION
+        ).forEach { type ->
             val title = WorkflowUiHelper.getNodeTitle(type)
             val desc = WorkflowUiHelper.getNodeDescription(type)
             val icon = WorkflowUiHelper.getNodeIcon(type)

@@ -2,7 +2,6 @@ package dev.zophop.data
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import dev.zophop.domain.model.NodeType
 import dev.zophop.domain.model.Precondition
 import dev.zophop.domain.model.PreconditionType
 import dev.zophop.domain.model.WorkflowConnection
@@ -92,7 +91,7 @@ fun PreconditionEntity.toDomain(): Precondition {
                         WorkflowNode(
                             id = nodeObj.getString("id"),
                             name = nodeObj.getString("name"),
-                            type = NodeType.valueOf(nodeObj.getString("type")),
+                            type = nodeObj.getString("type"),
                             isEnabled = nodeObj.optBoolean("isEnabled", true),
                             configJson = nodeObj.optString("configJson", "{}")
                         )

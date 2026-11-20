@@ -1,6 +1,6 @@
 package dev.zophop.integration
 
-import dev.zophop.domain.engine.ExecutionContext
+import dev.zophop.plugin.api.ExecutionContext
 import dev.zophop.domain.engine.NodeExecutorFactory
 import dev.zophop.domain.engine.PreconditionEvaluator
 import dev.zophop.domain.engine.PreconditionResult

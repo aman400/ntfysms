@@ -17,6 +17,11 @@ android {
     buildFeatures {
         aidl = true
     }
+    packaging {
+        resources {
+            merges += "META-INF/services/dev.zophop.plugin.api.NodePluginModule"
+        }
+    }
 }
 
 kotlin {
@@ -36,4 +41,10 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(project(":plugins:sms"))
+    testImplementation(project(":plugins:notification"))
+    testImplementation(project(":plugins:ntfy"))
+    testImplementation(project(":plugins:gotify"))
+    testImplementation(project(":plugins:call"))
+    testImplementation(project(":plugins:gps"))
 }

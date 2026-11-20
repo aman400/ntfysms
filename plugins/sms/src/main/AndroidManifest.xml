@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.zophop.smsplugin">
+    package="dev.zophop.plugin.sms">
 
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
-    <application android:label="ZopHop SMS Plugin" android:allowBackup="false" android:supportsRtl="true">
+    <application>
         <service android:name=".SmsNodePluginService" android:exported="true">
             <intent-filter>
                 <action android:name="dev.zophop.plugin.ACTION_NODE_SERVICE" />

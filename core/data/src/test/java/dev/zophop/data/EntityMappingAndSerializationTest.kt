@@ -56,7 +56,7 @@ class EntityMappingAndSerializationTest {
                 put(org.json.JSONObject().apply {
                     put("id", node1.id)
                     put("name", node1.name)
-                    put("type", node1.type.name)
+                    put("type", node1.type)
                     put("isEnabled", node1.isEnabled)
                     put("configJson", node1.configJson)
                 })

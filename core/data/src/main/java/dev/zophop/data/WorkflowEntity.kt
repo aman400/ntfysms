@@ -2,7 +2,6 @@ package dev.zophop.data
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import dev.zophop.domain.model.NodeType
 import dev.zophop.domain.model.Precondition
 import dev.zophop.domain.model.PreconditionType
 import dev.zophop.domain.model.Workflow
@@ -30,7 +29,7 @@ data class WorkflowEntity(
                 val nodeObj = JSONObject().apply {
                     put("id", node.id)
                     put("name", node.name)
-                    put("type", node.type.name)
+                    put("type", node.type)
                     put("isEnabled", node.isEnabled)
                     put("configJson", node.configJson)
 
@@ -70,7 +69,7 @@ data class WorkflowEntity(
                                             chainNodesArr.put(JSONObject().apply {
                                                 put("id", cNode.id)
                                                 put("name", cNode.name)
-                                                put("type", cNode.type.name)
+                                                put("type", cNode.type)
                                                 put("isEnabled", cNode.isEnabled)
                                                 put("configJson", cNode.configJson)
                                             })
@@ -216,7 +215,7 @@ fun WorkflowEntity.toDomain(): Workflow {
                                             WorkflowNode(
                                                 id = nObj.getString("id"),
                                                 name = nObj.getString("name"),
-                                                type = NodeType.valueOf(nObj.getString("type")),
+                                                type = nObj.getString("type"),
                                                 isEnabled = nObj.optBoolean("isEnabled", true),
                                                 configJson = nObj.optString("configJson", "{}")
                                             )
@@ -254,7 +253,7 @@ fun WorkflowEntity.toDomain(): Workflow {
                     WorkflowNode(
                         id = id,
                         name = name,
-                        type = NodeType.valueOf(typeStr),
+                        type = typeStr,
                         isEnabled = isEnabled,
                         configJson = configJson,
                         preconditions = preconditions

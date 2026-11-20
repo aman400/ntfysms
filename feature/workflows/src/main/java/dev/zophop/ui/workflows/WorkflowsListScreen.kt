@@ -188,47 +188,25 @@ fun WorkflowsListScreen(
     if (showCreateTriggerSheet) {
         CreateTriggerSelectionBottomSheet(
             onDismiss = { showCreateTriggerSheet = false },
-            onSelectTrigger = { triggerType ->
+            onSelectTrigger = { triggerManifest ->
                 showCreateTriggerSheet = false
+                val triggerNode = WorkflowNode(
+                    id = UUID.randomUUID().toString(),
+                    name = triggerManifest.displayName,
+                    type = triggerManifest.typeId,
+                    isEnabled = true,
+                    configJson = "{}"
+                )
+
                 val newWf = Workflow(
                     id = UUID.randomUUID().toString(),
-                    name = when (triggerType) {
-                        NodeType.SMS_TRIGGER -> "SMS Automation"
-                        NodeType.NOTIFICATION_TRIGGER -> "App Notification Automation"
-                        else -> "Manual Action Automation"
-                    },
-                    description = "Custom automated message forwarding pipeline",
+                    name = "${triggerManifest.displayName} Automation",
+                    description = "Automated pipeline for ${triggerManifest.displayName}",
                     isEnabled = true,
-                    nodes = listOf(
-                        WorkflowNode(
-                            id = UUID.randomUUID().toString(),
-                            name = WorkflowUiHelper.getNodeTitle(triggerType),
-                            type = triggerType,
-                            isEnabled = true,
-                            configJson = when (triggerType) {
-                                NodeType.SMS_TRIGGER -> "{\"allowlist\": \".*\", \"keywordRegex\": \".*\"}"
-                                NodeType.NOTIFICATION_TRIGGER -> "{\"packageFilter\": \".*\", \"textRegex\": \".*\"}"
-                                else -> "{}"
-                            }
-                        ),
-                        WorkflowNode(
-                            id = UUID.randomUUID().toString(),
-                            name = "ntfy Push Action",
-                            type = NodeType.NTFY_ACTION,
-                            isEnabled = true,
-                            configJson = "{\"serverUrl\": \"https://ntfy.sh\", \"topic\": \"my-topic\", \"template\": \"\${body}\"}"
-                        )
-                    ),
+                    nodes = listOf(triggerNode),
                     connections = emptyList()
                 )
-                // Fix connections correctly
-                val fixedConns = listOf(
-                    WorkflowConnection(
-                        fromNodeId = newWf.nodes[0].id,
-                        toNodeId = newWf.nodes[1].id
-                    )
-                )
-                onEditWorkflow(newWf.copy(connections = fixedConns))
+                onEditWorkflow(newWf)
             }
         )
     }
@@ -271,7 +249,6 @@ fun WorkflowsListScreen(
 /**
  * Compact Modernized Card Item for a Workflow rule in the list.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WorkflowCardItem(
     workflow: Workflow,
@@ -492,8 +469,17 @@ fun WorkflowCardItem(
 @Composable
 fun CreateTriggerSelectionBottomSheet(
     onDismiss: () -> Unit,
-    onSelectTrigger: (NodeType) -> Unit
+    onSelectTrigger: (dev.zophop.plugin.api.NodePluginManifest) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val unifiedRegistry = remember { dev.zophop.domain.engine.plugin.UnifiedPluginRegistry(context) }
+    var triggerManifests by remember { mutableStateOf<List<dev.zophop.plugin.api.NodePluginManifest>>(emptyList()) }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        val allManifests = unifiedRegistry.getAllManifests()
+        triggerManifests = allManifests.filter { it.category == dev.zophop.plugin.api.NodeCategory.TRIGGER }
+    }
+
     NoSwipeBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -519,26 +505,25 @@ fun CreateTriggerSelectionBottomSheet(
                 }
             }
 
-            TriggerSelectionCard(
-                title = "SMS Message Trigger",
-                description = "Triggers automatically when incoming text messages match filters",
-                icon = Icons.Default.Sms,
-                onClick = { onSelectTrigger(NodeType.SMS_TRIGGER) }
-            )
-
-            TriggerSelectionCard(
-                title = "App Notification Trigger",
-                description = "Triggers automatically when notifications from selected apps arrive",
-                icon = Icons.Default.Notifications,
-                onClick = { onSelectTrigger(NodeType.NOTIFICATION_TRIGGER) }
-            )
-
-            TriggerSelectionCard(
-                title = "Manual Action Trigger",
-                description = "Triggers manually on demand with test simulation payloads",
-                icon = Icons.Default.PlayArrow,
-                onClick = { onSelectTrigger(NodeType.MANUAL_TRIGGER) }
-            )
+            if (triggerManifests.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                }
+            } else {
+                triggerManifests.forEach { manifest ->
+                    TriggerSelectionCard(
+                        title = manifest.displayName,
+                        description = manifest.description,
+                        icon = WorkflowUiHelper.getNodeIcon(manifest.typeId),
+                        onClick = { onSelectTrigger(manifest) }
+                    )
+                }
+            }
         }
     }
 }

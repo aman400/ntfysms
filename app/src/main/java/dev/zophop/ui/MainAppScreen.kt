@@ -96,6 +96,13 @@ fun MainAppScreen(
     val activeExecutionState by viewModel.activeExecutionState.collectAsState()
     var showActiveExecutionSheet by remember { mutableStateOf(false) }
 
+    androidx.compose.runtime.LaunchedEffect(uiState.selectedWorkflowForLogs) {
+        if (uiState.selectedWorkflowForLogs != null) {
+            activeLogsWorkflow = uiState.selectedWorkflowForLogs
+            viewModel.clearSelectedWorkflowForLogs()
+        }
+    }
+
     val currentDestination: MainScreenDestination = remember(
         activeEditingWorkflow,
         activeLogsWorkflow,

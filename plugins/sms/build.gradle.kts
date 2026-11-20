@@ -1,17 +1,13 @@
 plugins {
-    id("com.android.application")
+    id("com.android.library")
 }
 
 android {
-    namespace = "com.example.zophop.smsplugin"
+    namespace = "dev.zophop.plugin.sms"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.example.zophop.smsplugin"
         minSdk = 26
-        targetSdk = 37
-        versionCode = 1
-        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -36,6 +32,7 @@ dependencies {
     implementation(project(":core:plugin-api"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.json)
+    implementation(libs.okhttp)
 
     testImplementation(libs.junit)
     testImplementation(libs.androidx.junit)

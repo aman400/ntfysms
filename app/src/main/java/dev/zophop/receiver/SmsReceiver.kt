@@ -10,7 +10,7 @@ import dev.zophop.data.EncryptedSettingsRepository
 import dev.zophop.data.RoomCredentialRepository
 import dev.zophop.data.RoomWorkflowRepository
 import dev.zophop.data.WorkflowExecutionLogEntity
-import dev.zophop.domain.engine.ExecutionContext
+import dev.zophop.plugin.api.ExecutionContext
 import dev.zophop.domain.engine.PreconditionEvaluator
 import dev.zophop.domain.engine.WorkflowEngine
 import dev.zophop.domain.engine.ExecutionJobRegistry

@@ -2,87 +2,17 @@ package dev.zophop.domain.engine.executors
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.os.Build
-import android.telephony.SmsManager
 import androidx.core.app.NotificationCompat
-import dev.zophop.domain.engine.ExecutionContext
-import dev.zophop.domain.model.NodeType
+import dev.zophop.plugin.api.ExecutionContext
+import dev.zophop.plugin.api.NodeExecutionResult
+import dev.zophop.plugin.api.NodeExecutor
 import dev.zophop.domain.model.WorkflowNode
 import org.json.JSONObject
 import java.util.regex.Pattern
-
-/**
- * Strategy executor for [NodeType.SMS_TRIGGER].
- */
-class SmsTriggerExecutor : NodeExecutor {
-    override suspend fun execute(node: WorkflowNode, context: ExecutionContext, appContext: Context?): NodeExecutionResult {
-        if (appContext != null) {
-            val hasReceiveSms = androidx.core.content.ContextCompat.checkSelfPermission(
-                appContext,
-                android.Manifest.permission.RECEIVE_SMS
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-            if (!hasReceiveSms) {
-                return NodeExecutionResult.Failed("Missing Receive SMS permission (RECEIVE_SMS)")
-            }
-        }
-
-        val config = try { JSONObject(node.configJson) } catch (_: Exception) { JSONObject() }
-        val allowlist = config.optString("allowlist", ".*")
-        val keywordRegex = config.optString("keywordRegex", ".*")
-
-        val sender = context.getString("sender", "").ifEmpty {
-            context.getString("header", "").ifEmpty {
-                context.getString("sms_header", "").ifEmpty {
-                    context.getString("address", "")
-                }
-            }
-        }
-
-        val body = context.getString("body", "").ifEmpty {
-            context.getString("sms_body", "").ifEmpty {
-                context.getString("message", "").ifEmpty {
-                    context.getString("text", "")
-                }
-            }
-        }
-
-        val allowlistPatterns = allowlist.split(",", "\n").map { it.trim() }.filter { it.isNotEmpty() }
-        val senderMatches = allowlistPatterns.isEmpty() || allowlistPatterns.any { pattern ->
-            try {
-                val regex = Pattern.compile(pattern.replace("*", ".*"), Pattern.CASE_INSENSITIVE)
-                regex.matcher(sender).find()
-            } catch (_: Exception) { false }
-        }
-
-        if (!senderMatches) {
-            return NodeExecutionResult.Failed("Sender '$sender' did not match allowlist")
-        }
-
-        if (keywordRegex.isNotBlank() && keywordRegex != ".*") {
-            try {
-                val regex = Pattern.compile(keywordRegex, Pattern.CASE_INSENSITIVE)
-                if (!regex.matcher(body).find()) {
-                    return NodeExecutionResult.Failed("Message body did not match keyword regex '$keywordRegex'")
-                }
-            } catch (e: Exception) {
-                return NodeExecutionResult.Failed("Invalid keyword regex: ${e.message}")
-            }
-        }
-
-        // Normalize SMS Header & Body variables in context
-        context.set("sender", sender)
-        context.set("header", sender)
-        context.set("sms_header", sender)
-        context.set("address", sender)
-        context.set("body", body)
-        context.set("sms_body", body)
-        context.set("message", body)
-        context.set("text", body)
-
-        return NodeExecutionResult.Success(logMessage = "SMS trigger matched sender: $sender")
-    }
-}
 
 /**
  * Strategy executor for [NodeType.MANUAL_TRIGGER].
@@ -234,6 +164,17 @@ class SendNotificationExecutor : NodeExecutor {
                 nm.createNotificationChannel(channel)
             }
 
+            val openAppIntent = Intent().apply {
+                setClassName(ctx, "dev.zophop.ui.MainActivity")
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val pendingOpenIntent = PendingIntent.getActivity(
+                ctx,
+                System.currentTimeMillis().toInt(),
+                openAppIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
             val notification = NotificationCompat.Builder(ctx, channelId)
                 .setSmallIcon(android.R.drawable.ic_dialog_alert)
                 .setContentTitle(title)
@@ -241,6 +182,7 @@ class SendNotificationExecutor : NodeExecutor {
                 .setStyle(NotificationCompat.BigTextStyle().bigText(text))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setDefaults(NotificationCompat.DEFAULT_ALL)
+                .setContentIntent(pendingOpenIntent)
                 .setAutoCancel(true)
                 .build()
 
@@ -253,37 +195,18 @@ class SendNotificationExecutor : NodeExecutor {
 }
 
 /**
- * Strategy executor for [NodeType.SEND_SMS_ACTION].
+ * Strategy executor for [NodeType.CRON_TRIGGER].
  */
-class SendSmsExecutor : NodeExecutor {
+class CronTriggerExecutor : NodeExecutor {
     override suspend fun execute(node: WorkflowNode, context: ExecutionContext, appContext: Context?): NodeExecutionResult {
-        if (appContext != null) {
-            val hasSendSms = androidx.core.content.ContextCompat.checkSelfPermission(
-                appContext,
-                android.Manifest.permission.SEND_SMS
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-            if (!hasSendSms) {
-                return NodeExecutionResult.Failed("Missing Send SMS permission (SEND_SMS)")
-            }
-        }
-
         val config = try { JSONObject(node.configJson) } catch (_: Exception) { JSONObject() }
-        val recipientTemplate = config.optString("recipient", "")
-        val bodyTemplate = config.optString("body", "\${formatted_payload}")
+        val payload = config.optString("testPayload", "Scheduled cron trigger executed").ifEmpty { "Scheduled cron trigger executed" }
 
-        val recipient = context.interpolate(recipientTemplate).trim()
-        val body = context.interpolate(bodyTemplate).trim()
+        context.set("body", payload)
+        context.set("text", payload)
+        context.set("sender", "CronScheduler")
+        context.set("timestamp", System.currentTimeMillis().toString())
 
-        if (recipient.isBlank() || body.isBlank()) {
-            return NodeExecutionResult.Failed("SMS recipient or body is empty")
-        }
-
-        return try {
-            val smsManager = SmsManager.getDefault()
-            smsManager.sendTextMessage(recipient, null, body, null, null)
-            NodeExecutionResult.Success(logMessage = "Dispatched SMS to $recipient")
-        } catch (e: Exception) {
-            NodeExecutionResult.Failed("Failed to send SMS: ${e.message}")
-        }
+        return NodeExecutionResult.Success(logMessage = "Cron schedule triggered successfully")
     }
 }

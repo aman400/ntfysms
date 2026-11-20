@@ -2,6 +2,8 @@ package dev.zophop.domain.engine
 
 import dev.zophop.domain.engine.executors.*
 import dev.zophop.data.CredentialRepository
+import dev.zophop.plugin.api.ExecutionContext
+import dev.zophop.plugin.api.NodeExecutionResult
 import dev.zophop.domain.model.Credential
 import dev.zophop.domain.model.CredentialType
 import dev.zophop.domain.model.NodeType

@@ -1,6 +1,5 @@
 package dev.zophop.data
 
-import dev.zophop.domain.model.NodeType
 import dev.zophop.domain.model.Workflow
 import dev.zophop.domain.model.WorkflowConnection
 import dev.zophop.domain.model.WorkflowNode
@@ -18,61 +17,43 @@ class DefaultWorkflowInitializer(
         val triggerId = UUID.randomUUID().toString()
         val triggerNode = WorkflowNode(
             id = triggerId,
-            name = "SMS Input Filter",
-            type = NodeType.SMS_TRIGGER,
+            name = "Manual Action Trigger",
+            type = "MANUAL_TRIGGER",
             isEnabled = true,
-            configJson = JSONObject().apply {
-                put("allowlist", ".*")
-                put("keywordRegex", ".*")
-            }.toString()
-        )
-
-        val parserId = UUID.randomUUID().toString()
-        val parserNode = WorkflowNode(
-            id = parserId,
-            name = "OTP Code Extractor",
-            type = NodeType.REGEX_PARSER,
-            isEnabled = true,
-            configJson = JSONObject().apply {
-                put("regex", "\\b\\d{4,8}\\b")
-                put("outputKey", "code")
-            }.toString()
+            configJson = "{}"
         )
 
         val templateId = UUID.randomUUID().toString()
         val templateNode = WorkflowNode(
             id = templateId,
             name = "Message Payload Formatter",
-            type = NodeType.TEMPLATE_FORMATTER,
+            type = "TEMPLATE_FORMATTER",
             isEnabled = true,
             configJson = JSONObject().apply {
-                put("template", "\${body}")
+                put("template", "Test Alert Payload: \${body}")
             }.toString()
         )
 
         val actionId = UUID.randomUUID().toString()
         val actionNode = WorkflowNode(
             id = actionId,
-            name = "ntfy Target Action",
-            type = NodeType.NTFY_ACTION,
+            name = "Send System Notification",
+            type = "SEND_NOTIFICATION_ACTION",
             isEnabled = true,
             configJson = JSONObject().apply {
-                put("serverUrl", "https://ntfy.sh")
-                put("topic", "zophop-topic-" + UUID.randomUUID().toString().take(6))
-                put("priority", "3")
-                put("tags", "otp,sms")
+                put("title", "ZopHop Forwarder Test")
+                put("body", "\${formatted_payload}")
             }.toString()
         )
 
         val defaultWorkflow = Workflow(
-            id = "default_sms_workflow",
-            name = "Primary SMS Forwarder Workflow",
-            description = "Default automated workflow for SMS OTP extraction and ntfy notification forwarding",
+            id = "default_manual_workflow",
+            name = "Initial Starter Workflow",
+            description = "Default starter workflow for on-demand manual trigger testing and system notification delivery",
             isEnabled = true,
-            nodes = listOf(triggerNode, parserNode, templateNode, actionNode),
+            nodes = listOf(triggerNode, templateNode, actionNode),
             connections = listOf(
-                WorkflowConnection(fromNodeId = triggerId, toNodeId = parserId),
-                WorkflowConnection(fromNodeId = parserId, toNodeId = templateId),
+                WorkflowConnection(fromNodeId = triggerId, toNodeId = templateId),
                 WorkflowConnection(fromNodeId = templateId, toNodeId = actionId)
             )
         )

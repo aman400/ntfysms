@@ -1,17 +1,13 @@
 plugins {
-    id("com.android.application")
+    id("com.android.library")
 }
 
 android {
-    namespace = "com.example.zophop.ntfyplugin"
+    namespace = "dev.zophop.plugin.ntfy"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.example.zophop.ntfyplugin"
         minSdk = 26
-        targetSdk = 37
-        versionCode = 1
-        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -34,6 +30,7 @@ kotlin {
 
 dependencies {
     implementation(project(":core:plugin-api"))
+    implementation(project(":core:data"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.json)
     implementation(libs.okhttp)

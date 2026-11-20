@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.zophop.gpsplugin">
+    package="dev.zophop.plugin.gps">
 
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
-    <application android:label="ZopHop GPS Plugin" android:allowBackup="false" android:supportsRtl="true">
+    <application>
         <service android:name=".GpsNodePluginService" android:exported="true">
             <intent-filter>
                 <action android:name="dev.zophop.plugin.ACTION_NODE_SERVICE" />

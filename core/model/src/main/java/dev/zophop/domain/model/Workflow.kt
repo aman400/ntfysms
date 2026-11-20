@@ -2,31 +2,32 @@ package dev.zophop.domain.model
 
 import java.util.UUID
 
-enum class NodeType {
+object NodeType {
     // Triggers
-    SMS_TRIGGER,
-    NOTIFICATION_TRIGGER,
-    MANUAL_TRIGGER,
+    const val SMS_TRIGGER = "SMS_TRIGGER"
+    const val NOTIFICATION_TRIGGER = "NOTIFICATION_TRIGGER"
+    const val MANUAL_TRIGGER = "MANUAL_TRIGGER"
+    const val CRON_TRIGGER = "CRON_TRIGGER"
 
     // Parsers & Logic
-    PARSE_NOTIFICATION,
-    REGEX_PARSER,
-    JSON_PARSER,
-    TEMPLATE_FORMATTER,
-    CONDITION,
+    const val PARSE_NOTIFICATION = "PARSE_NOTIFICATION"
+    const val REGEX_PARSER = "REGEX_PARSER"
+    const val JSON_PARSER = "JSON_PARSER"
+    const val TEMPLATE_FORMATTER = "TEMPLATE_FORMATTER"
+    const val CONDITION = "CONDITION"
 
     // Actions
-    NTFY_ACTION,
-    GOTIFY_ACTION,
-    HTTP_ACTION,
-    SEND_NOTIFICATION_ACTION,
-    SEND_SMS_ACTION
+    const val NTFY_ACTION = "NTFY_ACTION"
+    const val GOTIFY_ACTION = "GOTIFY_ACTION"
+    const val HTTP_ACTION = "HTTP_ACTION"
+    const val SEND_NOTIFICATION_ACTION = "SEND_NOTIFICATION_ACTION"
+    const val SEND_SMS_ACTION = "SEND_SMS_ACTION"
 }
 
 data class WorkflowNode(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
-    val type: NodeType,
+    val type: String,
     val isEnabled: Boolean = true,
     val configJson: String = "{}",
     val preconditions: List<Precondition> = emptyList()

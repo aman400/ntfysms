@@ -1,17 +1,13 @@
 plugins {
-    id("com.android.application")
+    id("com.android.library")
 }
 
 android {
-    namespace = "com.example.zophop.gpsplugin"
+    namespace = "dev.zophop.plugin.gps"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.example.zophop.gpsplugin"
         minSdk = 26
-        targetSdk = 37
-        versionCode = 1
-        versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

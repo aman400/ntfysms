@@ -5,9 +5,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.os.IBinder
-import dev.zophop.domain.engine.ExecutionContext
-import dev.zophop.domain.engine.executors.NodeExecutionResult
-import dev.zophop.domain.engine.executors.NodeExecutor
+import dev.zophop.plugin.api.ExecutionContext
+import dev.zophop.plugin.api.NodeExecutionResult
+import dev.zophop.plugin.api.NodeExecutor
 import dev.zophop.domain.model.WorkflowNode
 import dev.zophop.plugin.api.INodePluginService
 import kotlinx.coroutines.Dispatchers

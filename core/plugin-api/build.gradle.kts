@@ -1,5 +1,6 @@
 plugins {
     id("com.android.library")
+    id("kotlin-parcelize")
 }
 
 android {
@@ -33,8 +34,10 @@ kotlin {
 }
 
 dependencies {
+    api(project(":core:model"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.json)
+    implementation(libs.okhttp)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

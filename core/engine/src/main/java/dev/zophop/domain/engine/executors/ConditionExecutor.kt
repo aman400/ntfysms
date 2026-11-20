@@ -1,7 +1,9 @@
 package dev.zophop.domain.engine.executors
 
 import android.content.Context
-import dev.zophop.domain.engine.ExecutionContext
+import dev.zophop.plugin.api.ExecutionContext
+import dev.zophop.plugin.api.NodeExecutionResult
+import dev.zophop.plugin.api.NodeExecutor
 import dev.zophop.domain.model.WorkflowNode
 import org.json.JSONObject
 import java.util.regex.Pattern

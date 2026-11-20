@@ -3,6 +3,10 @@ package dev.zophop.domain.engine
 import dev.zophop.domain.engine.executors.*
 import dev.zophop.domain.model.NodeType
 import dev.zophop.domain.model.WorkflowNode
+import dev.zophop.plugin.api.ExecutionContext
+import dev.zophop.plugin.api.NodeExecutionResult
+import dev.zophop.plugin.sms.SmsTriggerExecutor
+import dev.zophop.plugin.notification.NotificationTriggerExecutor
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -240,12 +244,12 @@ class NodeExecutorsTest {
         // Non-matching sender
         val ctx2 = ExecutionContext(mapOf("sender" to "SPAMMER", "body" to "Your OTP code is 1234"))
         val res2 = executor.execute(node, ctx2, null)
-        assertTrue(res2 is NodeExecutionResult.Failed)
+        assertTrue(res2 is NodeExecutionResult.Ignored)
 
         // Non-matching keyword
         val ctx3 = ExecutionContext(mapOf("sender" to "BANKALERT", "body" to "Hello world, buy now!"))
         val res3 = executor.execute(node, ctx3, null)
-        assertTrue(res3 is NodeExecutionResult.Failed)
+        assertTrue(res3 is NodeExecutionResult.Ignored)
     }
 
     @Test
@@ -264,7 +268,7 @@ class NodeExecutorsTest {
 
         val ctx2 = ExecutionContext(mapOf("package_name" to "com.unrelated.app", "title" to "Security Alert", "text" to "Login code"))
         val res2 = executor.execute(node, ctx2, null)
-        assertTrue(res2 is NodeExecutionResult.Failed)
+        assertTrue(res2 is NodeExecutionResult.Ignored)
     }
 
     // --- Regex Parser & Template Formatter Tests ---

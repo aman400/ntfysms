@@ -8,8 +8,10 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import dev.zophop.data.CredentialRepository
-import dev.zophop.domain.engine.executors.NodeExecutionResult
-import dev.zophop.domain.model.NodeType
+import dev.zophop.plugin.api.ExecutionContext
+import dev.zophop.plugin.api.NodeExecutionResult
+import dev.zophop.plugin.api.NodeExecutor
+import dev.zophop.domain.engine.plugin.CoreEngineNodesModule
 import dev.zophop.domain.model.Workflow
 import dev.zophop.domain.model.WorkflowNode
 import kotlinx.coroutines.CancellationException
@@ -61,7 +63,7 @@ enum class NodeStepState {
 data class NodeExecutionStep(
     val nodeId: String,
     val nodeName: String,
-    val nodeType: NodeType,
+    val nodeType: String,
     val state: NodeStepState = NodeStepState.PENDING,
     val logMessage: String = "",
     val errorReason: String? = null
@@ -73,7 +75,7 @@ fun List<NodeExecutionStep>.toJsonString(): String {
         val obj = org.json.JSONObject()
         obj.put("nodeId", step.nodeId)
         obj.put("nodeName", step.nodeName)
-        obj.put("nodeType", step.nodeType.name)
+        obj.put("nodeType", step.nodeType)
         obj.put("state", step.state.name)
         obj.put("logMessage", step.logMessage)
         if (step.errorReason != null) {
@@ -95,7 +97,7 @@ fun String.toNodeExecutionSteps(): List<NodeExecutionStep>? {
                 NodeExecutionStep(
                     nodeId = obj.getString("nodeId"),
                     nodeName = obj.getString("nodeName"),
-                    nodeType = NodeType.valueOf(obj.getString("nodeType")),
+                    nodeType = obj.getString("nodeType"),
                     state = NodeStepState.valueOf(obj.getString("state")),
                     logMessage = obj.optString("logMessage", ""),
                     errorReason = if (obj.has("errorReason")) obj.getString("errorReason") else null
@@ -127,6 +129,7 @@ open class WorkflowEngine(
         if (!showNotif) return
 
         val ctx = context ?: return
+        val workflowId = execContext?.getString("workflow_id", "") ?: ""
         try {
             val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
             val channelId = "zophop_execution_channel"
@@ -143,6 +146,18 @@ open class WorkflowEngine(
                 nm.createNotificationChannel(channel)
             }
 
+            val openAppIntent = Intent().apply {
+                setClassName(ctx, "dev.zophop.ui.MainActivity")
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra("open_workflow_id", workflowId)
+            }
+            val pendingOpenIntent = PendingIntent.getActivity(
+                ctx,
+                notificationId + 1000,
+                openAppIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
             if (isFinished) {
                 if (isSuccess && !statusText.contains("Cancelled", ignoreCase = true)) {
                     nm.cancel(notificationId)
@@ -158,6 +173,7 @@ open class WorkflowEngine(
                         .setStyle(NotificationCompat.BigTextStyle().bigText(statusText))
                         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                         .setAutoCancel(true)
+                        .setContentIntent(pendingOpenIntent)
                         .setOngoing(false)
                         .setProgress(0, 0, false)
                         .clearActions()
@@ -185,6 +201,7 @@ open class WorkflowEngine(
                     .setContentText(statusText)
                     .setStyle(NotificationCompat.BigTextStyle().bigText(statusText))
                     .setPriority(NotificationCompat.PRIORITY_LOW)
+                    .setContentIntent(pendingOpenIntent)
                     .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel Execution", pendingCancelIntent)
                     .setOngoing(true)
                     .build()
@@ -244,7 +261,7 @@ open class WorkflowEngine(
 
             if (triggerNodes.isEmpty()) {
                 triggerNodes = workflow.nodes.filter {
-                    it.type == NodeType.SMS_TRIGGER || it.type == NodeType.NOTIFICATION_TRIGGER || it.type == NodeType.MANUAL_TRIGGER
+                    it.type == CoreEngineNodesModule.MANUAL_TRIGGER || it.type == "SMS_TRIGGER" || it.type == "NOTIFICATION_TRIGGER"
                 }
                 if (triggerNodes.isEmpty()) {
                     triggerNodes = workflow.nodes.filter { node ->
@@ -342,6 +359,20 @@ open class WorkflowEngine(
                 val result = executor.execute(currentNode, context, appContext)
 
                 when (result) {
+                    is NodeExecutionResult.Ignored -> {
+                        logs.add("ℹ️ Node '${currentNode.name}' ignored: ${result.reason}")
+                        updateStep(currentNode.id, NodeStepState.SKIPPED, message = result.reason)
+                        steps.forEachIndexed { i, s ->
+                            if (s.state == NodeStepState.PENDING) {
+                                steps[i] = steps[i].copy(state = NodeStepState.SKIPPED, logMessage = "Skipped due to filtered-out trigger")
+                            }
+                        }
+                        return@withContext WorkflowExecutionResult.Success(
+                            workflowId = workflow.id,
+                            logs = logs,
+                            steps = steps.toList()
+                        )
+                    }
                     is NodeExecutionResult.Failed -> {
                         logs.add("❌ Node '${currentNode.name}' failed: ${result.reason}")
                         updateStep(currentNode.id, NodeStepState.FAILED, error = result.reason, message = result.reason)
@@ -436,7 +467,7 @@ open class WorkflowEngine(
 
             if (triggerNodes.isEmpty()) {
                 triggerNodes = workflow.nodes.filter {
-                    it.type == NodeType.SMS_TRIGGER || it.type == NodeType.NOTIFICATION_TRIGGER || it.type == NodeType.MANUAL_TRIGGER
+                    it.type == CoreEngineNodesModule.MANUAL_TRIGGER || it.type == "SMS_TRIGGER" || it.type == "NOTIFICATION_TRIGGER"
                 }
                 if (triggerNodes.isEmpty()) {
                     triggerNodes = workflow.nodes.filter { node ->
@@ -525,10 +556,45 @@ open class WorkflowEngine(
                 ensureActive()
 
                 // 2. Execute Node
-                val executor = executorFactory.getExecutor(currentNode.type)
+                val executor = try {
+                    executorFactory.getExecutor(currentNode.type)
+                } catch (e: Exception) {
+                    logs.add("❌ Node '${currentNode.name}' failed: ${e.message}")
+                    updateStep(currentNode.id, NodeStepState.FAILED, error = e.message ?: "Unknown node type", message = e.message ?: "Unknown node type")
+                    steps.forEachIndexed { i, s ->
+                        if (s.state == NodeStepState.PENDING) {
+                            steps[i] = steps[i].copy(state = NodeStepState.SKIPPED, logMessage = "Skipped due to disabled or unknown node type")
+                        }
+                    }
+                    onStepUpdate(steps.toList())
+                    postProgressNotification(appContext, context, notifId, workflow.name, "Failed at step '${currentNode.name}': ${e.message}", isFinished = true, isSuccess = false)
+                    return@withContext WorkflowExecutionResult.Failed(
+                        workflowId = workflow.id,
+                        nodeId = currentNode.id,
+                        reason = e.message ?: "Unknown node type",
+                        logs = logs,
+                        steps = steps.toList()
+                    )
+                }
                 val result = executor.execute(currentNode, context, appContext)
 
                 when (result) {
+                    is NodeExecutionResult.Ignored -> {
+                        logs.add("ℹ️ Node '${currentNode.name}' ignored: ${result.reason}")
+                        updateStep(currentNode.id, NodeStepState.SKIPPED, message = result.reason)
+
+                        steps.forEachIndexed { i, s ->
+                            if (s.state == NodeStepState.PENDING) {
+                                steps[i] = steps[i].copy(state = NodeStepState.SKIPPED, logMessage = "Skipped due to filtered-out trigger")
+                            }
+                        }
+                        onStepUpdate(steps.toList())
+                        return@withContext WorkflowExecutionResult.Success(
+                            workflowId = workflow.id,
+                            logs = logs,
+                            steps = steps.toList()
+                        )
+                    }
                     is NodeExecutionResult.Failed -> {
                         logs.add("❌ Node '${currentNode.name}' failed: ${result.reason}")
                         updateStep(currentNode.id, NodeStepState.FAILED, error = result.reason, message = result.reason)

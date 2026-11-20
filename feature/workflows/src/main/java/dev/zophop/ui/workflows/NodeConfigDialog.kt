@@ -5,10 +5,16 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import dev.zophop.domain.engine.WorkflowEngine
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,9 +33,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.foundation.Image
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Checkbox
 import dev.zophop.core.ui.components.NoSwipeBottomSheet
@@ -52,6 +61,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -80,6 +90,7 @@ import dev.zophop.domain.model.Credential
 import dev.zophop.domain.model.NodeType
 import dev.zophop.domain.model.WorkflowNode
 import org.json.JSONObject
+import androidx.core.net.toUri
 
 private data class Quadruple<A, B, C, D>(
     val first: A,
@@ -111,139 +122,151 @@ fun NodeConfigBottomSheet(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
 
+    val unifiedRegistry = remember { dev.zophop.domain.engine.plugin.UnifiedPluginRegistry(context) }
     val externalPluginRegistry = remember { dev.zophop.domain.engine.plugin.ExternalPluginRegistry(context) }
+    var pluginInfo by remember { mutableStateOf<dev.zophop.domain.engine.plugin.ExternalPluginServiceInfo?>(null) }
     var pluginManifest by remember { mutableStateOf<dev.zophop.plugin.api.NodePluginManifest?>(null) }
 
-    androidx.compose.runtime.LaunchedEffect(node.type.name) {
-        if (!node.type.name.startsWith("com.")) return@LaunchedEffect
+    androidx.compose.runtime.LaunchedEffect(node.type) {
+        pluginManifest = unifiedRegistry.getManifestByTypeId(node.type)
         val plugins = externalPluginRegistry.discoverPlugins()
-        pluginManifest = plugins.find { it.manifest.typeId == node.type.name }?.manifest
+        pluginInfo = plugins.find { it.manifest.typeId == node.type }
     }
 
     val sendSmsPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { _ -> }
 
-    val hasSendSmsPermission = remember(context) {
-        androidx.core.content.ContextCompat.checkSelfPermission(
-            context,
-            android.Manifest.permission.SEND_SMS
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-    }
-
-    val (isMissingPerm, missingPermTitle, missingPermDesc, onGrantClick) = when {
-        node.type == NodeType.NOTIFICATION_TRIGGER && !hasNotificationListenerPermission -> Quadruple(
-            true,
-            "⚠️ Notification Listener Permission Missing",
-            "Node is disabled. Grant Notification Access in system settings to enable.",
-            {
-                try {
-                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                } catch (_: Exception) {}
-            }
+    var notifPerm by remember { mutableStateOf(isNotificationListenerEnabled(context)) }
+    var smsPerm by remember {
+        mutableStateOf(
+            androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECEIVE_SMS) == android.content.pm.PackageManager.PERMISSION_GRANTED
         )
-        pluginManifest?.requiredPermissions?.isNotEmpty() == true -> {
-            val manifest = pluginManifest!!
-            val isGranted = manifest.requiredPermissions.all { perm ->
-                androidx.core.content.ContextCompat.checkSelfPermission(context, perm) == android.content.pm.PackageManager.PERMISSION_GRANTED
-            }
-            if (!isGranted) {
-                Quadruple(
-                    true,
-                    "⚠️ Plugin Permission Missing",
-                    "Node requires ${manifest.requiredPermissions.joinToString(", ")}. Grant in Plugin Settings.",
-                    {
-                        if (manifest.settingsIntentAction != null) {
-                            try { context.startActivity(Intent(manifest.settingsIntentAction)) } catch (_: Exception) {}
-                        } else {
-                            try {
-                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                    data = android.net.Uri.parse("package:" + manifest.typeId.substringBeforeLast("."))
-                                }
-                                context.startActivity(intent)
-                            } catch (_: Exception) {}
-                        }
-                    }
-                )
-            } else {
-                Quadruple(false, "", "", {})
+    }
+    var sendSmsPerm by remember {
+        mutableStateOf(
+            androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.SEND_SMS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        )
+    }
+    var postNotifPerm by remember {
+        mutableStateOf(
+            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            } else true
+        )
+    }
+    var permissionCheckTrigger by remember { mutableIntStateOf(0) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                notifPerm = isNotificationListenerEnabled(context)
+                smsPerm = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECEIVE_SMS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                sendSmsPerm = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.SEND_SMS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                postNotifPerm = if (android.os.Build.VERSION.SDK_INT >= 33) {
+                    androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                } else true
+                permissionCheckTrigger++
             }
         }
-        node.type == NodeType.SMS_TRIGGER && !hasSmsPermission -> Quadruple(
-            true,
-            "⚠️ SMS Permission Missing (RECEIVE_SMS)",
-            "Node is disabled. Grant SMS permission to intercept incoming text messages.",
-            { onRequestSmsPermission?.invoke() }
-        )
-        node.type == NodeType.SEND_SMS_ACTION && !hasSendSmsPermission -> Quadruple(
-            true,
-            "⚠️ Send SMS Permission Missing (SEND_SMS)",
-            "Node is disabled. Grant SEND_SMS permission to send text messages via SIM card.",
-            { sendSmsPermissionLauncher.launch(android.Manifest.permission.SEND_SMS) }
-        )
-        node.type == NodeType.SEND_NOTIFICATION_ACTION && android.os.Build.VERSION.SDK_INT >= 33 && !hasPostNotificationsPermission -> Quadruple(
-            true,
-            "⚠️ Notification Permission Missing (POST_NOTIFICATIONS)",
-            "Node is disabled. Grant POST_NOTIFICATIONS permission to display notifications.",
-            { onRequestPostNotificationsPermission?.invoke() }
-        )
-        else -> Quadruple(false, null, null, null)
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    val (isMissingPerm, missingPermTitle, missingPermDesc, onGrantClick) = remember(permissionCheckTrigger, pluginManifest, pluginInfo, notifPerm, smsPerm, sendSmsPerm, postNotifPerm) {
+        when {
+            node.type.contains("NOTIFICATION_TRIGGER") && !notifPerm -> Quadruple(
+                true,
+                "⚠️ Notification Listener Permission Missing",
+                "Node is disabled. Grant Notification Access in system settings to enable.",
+                {
+                    try {
+                        context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    } catch (_: Exception) {}
+                }
+            )
+            pluginManifest?.requiredPermissions?.isNotEmpty() == true && pluginInfo != null -> {
+                val info = pluginInfo!!
+                val manifest = info.manifest
+                val isGranted = manifest.requiredPermissions.all { perm ->
+                    context.packageManager.checkPermission(perm, info.packageName) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                }
+                if (!isGranted) {
+                    Quadruple(
+                        true,
+                        "⚠️ Plugin Permission Missing",
+                        "Node requires ${manifest.requiredPermissions.joinToString(", ")}. Grant in Plugin App.",
+                        {
+                            if (manifest.setupActivity != null) {
+                                try {
+                                    val intent = Intent().apply {
+                                        component = android.content.ComponentName(info.packageName, manifest.setupActivity!!)
+                                    }
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {
+                                    try {
+                                        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                            data = ("package:" + info.packageName).toUri()
+                                        }
+                                        context.startActivity(intent)
+                                    } catch (_: Exception) {}
+                                }
+                            } else {
+                                try {
+                                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = ("package:" + info.packageName).toUri()
+                                    }
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {}
+                            }
+                        }
+                    )
+                } else {
+                    Quadruple(false, "", "", {})
+                }
+            }
+            node.type.contains("SMS_TRIGGER") && !smsPerm -> Quadruple(
+                true,
+                "⚠️ SMS Permission Missing (RECEIVE_SMS)",
+                "Node is disabled. Grant SMS permission to intercept incoming text messages.",
+                { onRequestSmsPermission?.invoke() }
+            )
+            node.type.contains("SEND_SMS_ACTION") && !sendSmsPerm -> Quadruple(
+                true,
+                "⚠️ Send SMS Permission Missing (SEND_SMS)",
+                "Node is disabled. Grant SEND_SMS permission to send text messages via SIM card.",
+                { sendSmsPermissionLauncher.launch(android.Manifest.permission.SEND_SMS) }
+            )
+            node.type.contains("SEND_NOTIFICATION_ACTION") && android.os.Build.VERSION.SDK_INT >= 33 && !postNotifPerm -> Quadruple(
+                true,
+                "⚠️ Notification Permission Missing (POST_NOTIFICATIONS)",
+                "Node is disabled. Grant POST_NOTIFICATIONS permission to display notifications.",
+                { onRequestPostNotificationsPermission?.invoke() }
+            )
+            else -> Quadruple(false, null, null, null)
+        }
     }
 
     var name by remember { mutableStateOf(node.name) }
     var isEnabled by remember { mutableStateOf(node.isEnabled) }
 
-    val configObj = remember {
-        try { JSONObject(node.configJson) } catch (_: Exception) { JSONObject() }
+    val initialConfigMap = remember(node.configJson) {
+        val map = mutableMapOf<String, String>()
+        try {
+            val json = JSONObject(node.configJson)
+            val keys = json.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                map[k] = json.optString(k, "")
+            }
+        } catch (_: Exception) {}
+        map
     }
-
-    // Config state parameters
-    var allowlist by remember { mutableStateOf(configObj.optString("allowlist", ".*")) }
-    var keywordRegex by remember { mutableStateOf(configObj.optString("keywordRegex", ".*")) }
-
-    var packageFilter by remember { mutableStateOf(configObj.optString("packageFilter", ".*")) }
-    var textRegex by remember { mutableStateOf(configObj.optString("textRegex", ".*")) }
-
-    // Contextual Test Run Payload Config for Triggers
-    var testSender by remember { mutableStateOf(configObj.optString("testSender", "+15551234567")) }
-    var testBody by remember { mutableStateOf(configObj.optString("testBody", "Your OTP verification code for bank login is 849201")) }
-    var testPackageName by remember { mutableStateOf(configObj.optString("testPackageName", "com.example.bankapp")) }
-    var testTitle by remember { mutableStateOf(configObj.optString("testTitle", "Bank Alert: OTP Code")) }
-    var testText by remember { mutableStateOf(configObj.optString("testText", "Your login code is 849201")) }
-
-    var regexPattern by remember { mutableStateOf(configObj.optString("regex", "\\b\\d{4,8}\\b")) }
-    var outputKey by remember { mutableStateOf(configObj.optString("outputKey", "code")) }
-
-    var jsonKey by remember { mutableStateOf(configObj.optString("jsonKey", "code")) }
-    var targetType by remember { mutableStateOf(configObj.optString("targetType", "AUTO")) }
-    var defaultValue by remember { mutableStateOf(configObj.optString("defaultValue", "")) }
-    var inputVariable by remember { mutableStateOf(configObj.optString("inputVariable", "http_response")) }
-
-    var template by remember { mutableStateOf(configObj.optString("template", "\${formatted_payload}")) }
-
-    var condVariable by remember { mutableStateOf(configObj.optString("variable", "code")) }
-    var condOperator by remember { mutableStateOf(configObj.optString("operator", "NOT_EMPTY")) }
-    var condValue by remember { mutableStateOf(configObj.optString("value", "")) }
-
-    var serverUrl by remember { mutableStateOf(configObj.optString("serverUrl", "")) }
-    var topic by remember { mutableStateOf(configObj.optString("topic", "")) }
-    var token by remember { mutableStateOf(configObj.optString("token", "")) }
-    var appToken by remember { mutableStateOf(configObj.optString("appToken", "")) }
-    var title by remember { mutableStateOf(configObj.optString("title", "ZopHop Notification")) }
-    var priority by remember { mutableStateOf(configObj.optString("priority", "3")) }
-    var tags by remember { mutableStateOf(configObj.optString("tags", "otp,sms")) }
-
-    var httpUrl by remember { mutableStateOf(configObj.optString("url", "https://api.example.com/webhook")) }
-    var httpMethod by remember { mutableStateOf(configObj.optString("method", "POST")) }
-    var httpQueryParams by remember { mutableStateOf(configObj.optString("queryParams", "")) }
-    var httpAuthType by remember { mutableStateOf(configObj.optString("authType", "NONE")) }
-    var httpHeaders by remember { mutableStateOf(configObj.optString("headers", "Content-Type: application/json")) }
-    var httpBodyType by remember { mutableStateOf(configObj.optString("bodyType", "JSON")) }
-    var httpBody by remember { mutableStateOf(configObj.optString("bodyTemplate", "{\"sender\": \"\${sender}\", \"code\": \"\${code}\"}")) }
-    var credentialId by remember { mutableStateOf(configObj.optString("credentialId", "")) }
-
-    var recipient by remember { mutableStateOf(configObj.optString("recipient", "")) }
-    var smsBody by remember { mutableStateOf(configObj.optString("body", "\${formatted_payload}")) }
+    var configStateMap by remember(initialConfigMap) { mutableStateOf<Map<String, String>>(initialConfigMap) }
+    var credentialId by remember(configStateMap) { mutableStateOf(configStateMap["credentialId"] ?: "") }
 
     // Preconditions State - Attached Vault Precondition IDs
     var attachedVaultPrecIds by remember {
@@ -298,92 +321,25 @@ fun NodeConfigBottomSheet(
                                 errorMessage = "Node name cannot be blank."
                                 return@Button
                             }
-                            if (node.type == NodeType.HTTP_ACTION && httpUrl.isBlank()) {
-                                errorMessage = "HTTP endpoint URL cannot be blank."
-                                return@Button
+
+                            val configMapForValidation = mutableMapOf<String, String>()
+                            for ((k, v) in configStateMap) {
+                                configMapForValidation[k] = v
                             }
-                            if (node.type in listOf(NodeType.PARSE_NOTIFICATION, NodeType.REGEX_PARSER)) {
-                                try {
-                                    java.util.regex.Pattern.compile(regexPattern)
-                                } catch (e: Exception) {
-                                    errorMessage = "Invalid regular expression: ${e.message}"
-                                    return@Button
-                                }
+                            configMapForValidation["credentialId"] = credentialId
+
+                            val validationError = validateNodeConfig(node.type, configMapForValidation)
+                            if (validationError != null) {
+                                errorMessage = validationError
+                                return@Button
                             }
                             errorMessage = null
 
                             val newConfig = JSONObject().apply {
-                                put("credentialId", credentialId)
-                                when (node.type) {
-                                    NodeType.MANUAL_TRIGGER -> {
-                                        put("testBody", testBody)
-                                    }
-                                    NodeType.SMS_TRIGGER -> {
-                                        put("allowlist", allowlist)
-                                        put("keywordRegex", keywordRegex)
-                                        put("testSender", testSender)
-                                        put("testBody", testBody)
-                                    }
-                                    NodeType.NOTIFICATION_TRIGGER -> {
-                                        put("packageFilter", packageFilter)
-                                        put("textRegex", textRegex)
-                                        put("testPackageName", testPackageName)
-                                        put("testTitle", testTitle)
-                                        put("testText", testText)
-                                    }
-                                    NodeType.PARSE_NOTIFICATION, NodeType.REGEX_PARSER -> {
-                                        put("regex", regexPattern)
-                                        put("outputKey", outputKey)
-                                    }
-                                    NodeType.JSON_PARSER -> {
-                                        put("jsonKey", jsonKey)
-                                        put("outputKey", outputKey)
-                                        put("targetType", targetType)
-                                        put("defaultValue", defaultValue)
-                                        put("inputVariable", inputVariable)
-                                    }
-                                    NodeType.TEMPLATE_FORMATTER -> {
-                                        put("template", template)
-                                    }
-                                    NodeType.CONDITION -> {
-                                        put("variable", condVariable)
-                                        put("operator", condOperator)
-                                        put("value", condValue)
-                                    }
-                                    NodeType.NTFY_ACTION -> {
-                                        put("serverUrl", serverUrl)
-                                        put("topic", topic)
-                                        put("token", token)
-                                        put("title", title)
-                                        put("priority", priority)
-                                        put("tags", tags)
-                                        put("template", template)
-                                    }
-                                    NodeType.GOTIFY_ACTION -> {
-                                        put("serverUrl", serverUrl)
-                                        put("appToken", appToken)
-                                        put("title", title)
-                                        put("priority", priority)
-                                        put("template", template)
-                                    }
-                                    NodeType.HTTP_ACTION -> {
-                                        put("url", httpUrl)
-                                        put("method", httpMethod)
-                                        put("queryParams", httpQueryParams)
-                                        put("authType", httpAuthType)
-                                        put("headers", httpHeaders)
-                                        put("bodyType", httpBodyType)
-                                        put("bodyTemplate", httpBody)
-                                    }
-                                    NodeType.SEND_NOTIFICATION_ACTION -> {
-                                        put("title", title)
-                                        put("message", template)
-                                    }
-                                    NodeType.SEND_SMS_ACTION -> {
-                                        put("recipient", recipient)
-                                        put("body", smsBody)
-                                    }
+                                for ((k, v) in configStateMap) {
+                                    put(k, v)
                                 }
+                                put("credentialId", credentialId)
                             }
 
                             val attachedPreconditions = if (showPreconditionsGuard) {
@@ -483,16 +439,16 @@ fun NodeConfigBottomSheet(
             }
 
             // Credential attachment selector for Actions
-            if (node.type in listOf(NodeType.HTTP_ACTION, NodeType.NTFY_ACTION, NodeType.GOTIFY_ACTION)) {
+            if (node.type.contains("HTTP_ACTION") || node.type.contains("NTFY_ACTION") || node.type.contains("GOTIFY_ACTION") || node.type.contains("TELEGRAM_ACTION") || pluginManifest?.requiredCredentialType != null) {
                 val selectedCred = credentials.find { it.id == credentialId }
-                val credName = selectedCred?.let { "🔑 ${it.name} (${it.type.name})" } ?: "None (Optional Credential)"
+                val credName = selectedCred?.let { "🔑 ${it.name} (${it.type})" } ?: "None (Optional Credential)"
 
                 SearchableDropdownSelector(
                     selectedItemText = credName,
                     label = "🔑 Attach Saved Credential",
                     searchPlaceholder = "Search credentials...",
                     items = credentials,
-                    itemText = { cred -> "${cred.name} (${cred.type.name})" },
+                    itemText = { cred -> "${cred.name} (${cred.type})" },
                     onItemSelected = { cred ->
                         credentialId = cred?.id ?: ""
                     },
@@ -508,613 +464,103 @@ fun NodeConfigBottomSheet(
                 )
             }
 
-            // Node Specific Config Fields
-            when (node.type) {
-                NodeType.SMS_TRIGGER -> {
-                    InfoTooltipField(
-                        value = allowlist,
-                        onValueChange = { allowlist = it },
-                        label = "Sender Allowlist Regex (e.g. .*BANK.*)",
-                        tooltipText = "Regex pattern or comma-separated list matching allowed SMS sender addresses.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    InfoTooltipField(
-                        value = keywordRegex,
-                        onValueChange = { keywordRegex = it },
-                        label = "Keyword Filter Regex (e.g. OTP|code)",
-                        tooltipText = "Regex filtering SMS body text for target keywords.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+            // Dynamic Manifest-Driven Config Fields
+            if (pluginManifest != null && pluginManifest!!.configSchema.isNotEmpty()) {
+                val schema = pluginManifest!!.configSchema
+                val mainFields = schema.filter { !it.isTestField && !it.key.startsWith("test", ignoreCase = true) }
+                val testFields = schema.filter { it.isTestField || it.key.startsWith("test", ignoreCase = true) }
 
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "🧪 Contextual Test Simulation Payload",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    InfoTooltipField(
-                        value = testSender,
-                        onValueChange = { testSender = it },
-                        label = "Simulated Sender",
-                        tooltipText = "Mock sender number used during dry-run test execution.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    InfoTooltipField(
-                        value = testBody,
-                        onValueChange = { testBody = it },
-                        label = "Simulated SMS Body",
-                        tooltipText = "Mock SMS text body used during dry-run test execution.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = false,
-                        minLines = 2
-                    )
-                }
-                NodeType.NOTIFICATION_TRIGGER -> {
-                    val context = LocalContext.current
-                    val installedApps = remember(context) {
-                        val selfPkg = context.packageName
-                        AppListHelper.getInstalledApps(context)
-                            .filter { it.packageName != ".*" && it.packageName != selfPkg }
-                            .map { Triple(it.packageName, it.appName, it.icon) }
-                    }
-
-                    var selectedPackages by remember {
-                        mutableStateOf(
-                            packageFilter.split(",", "\n").map { it.trim() }.filter { it.isNotEmpty() && it != ".*" }.toSet()
-                        )
-                    }
-                    var showAppPickerSheet by remember { mutableStateOf(false) }
-
-                    androidx.compose.runtime.LaunchedEffect(selectedPackages) {
-                        packageFilter = if (selectedPackages.isEmpty()) ".*" else selectedPackages.joinToString(", ")
-                    }
-
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    // Section 1: Main Node Configuration Inputs
+                    if (mainFields.isNotEmpty()) {
                         Text(
-                            text = "Target Apps Selection",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold
+                            text = "⚙️ Node Configuration",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                        Text(
-                            text = if (selectedPackages.isEmpty()) "Intercepting notifications from All Apps (.*)" else "Intercepting from ${selectedPackages.size} selected app(s)",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        mainFields.forEach { field ->
+                            RenderDynamicConfigField(
+                                field = field,
+                                currentVal = configStateMap[field.key] ?: "",
+                                onValueChange = { newValue ->
+                                    configStateMap = configStateMap + (field.key to newValue)
+                                }
+                            )
+                        }
+                    }
 
-                        Button(
-                            onClick = { showAppPickerSheet = true },
+                    // Section 2: Test Simulation Payload Inputs
+                    if (testFields.isNotEmpty()) {
+                        var isTestSectionExpanded by remember { mutableStateOf(true) }
+
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.7f),
+                            shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Select Target Apps (${selectedPackages.size})")
-                        }
-
-                        if (selectedPackages.isNotEmpty()) {
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                selectedPackages.forEach { pkg ->
-                                    val appInfo = installedApps.find { it.first == pkg }
-                                    val displayName = appInfo?.second ?: pkg
-                                    SuggestionChip(
-                                        onClick = {
-                                            selectedPackages = selectedPackages - pkg
-                                        },
-                                        label = { Text("$displayName ✕") }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (showAppPickerSheet) {
-                        NoSwipeBottomSheet(onDismissRequest = { showAppPickerSheet = false }) {
-                            var searchQuery by remember { mutableStateOf("") }
-                            val filteredApps = remember(installedApps, searchQuery) {
-                                if (searchQuery.isBlank()) installedApps
-                                else installedApps.filter {
-                                    it.second.contains(searchQuery, ignoreCase = true) || it.first.contains(searchQuery, ignoreCase = true)
-                                }
-                            }
-
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 20.dp)
-                                    .padding(bottom = 24.dp),
-                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                                    .padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(top = 16.dp),
+                                        .clickable { isTestSectionExpanded = !isTestSectionExpanded },
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "Select Target Apps",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Bold
+                                        text = "🧪 Test Simulation Payload",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.weight(1f)
                                     )
-                                    IconButton(onClick = { showAppPickerSheet = false }) {
-                                        Icon(Icons.Default.Close, contentDescription = "Close")
+                                    IconButton(
+                                        onClick = { isTestSectionExpanded = !isTestSectionExpanded },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (isTestSectionExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                            contentDescription = if (isTestSectionExpanded) "Collapse" else "Expand",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
                                     }
                                 }
 
-                                OutlinedTextField(
-                                    value = searchQuery,
-                                    onValueChange = { searchQuery = it },
-                                    label = { Text("Search apps by name or package...") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true
-                                )
+                                AnimatedVisibility(visible = isTestSectionExpanded) {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = "Mock input data used specifically for dry-running and testing this workflow on demand.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
 
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(380.dp)
-                                        .verticalScroll(rememberScrollState()),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    filteredApps.forEach { (pkg, appName, icon) ->
-                                        val isSelected = selectedPackages.contains(pkg)
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clickable {
-                                                    selectedPackages = if (isSelected) {
-                                                        selectedPackages - pkg
-                                                    } else {
-                                                        selectedPackages + pkg
-                                                    }
-                                                }
-                                                .padding(vertical = 8.dp, horizontal = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                        ) {
-                                            Checkbox(
-                                                checked = isSelected,
-                                                onCheckedChange = { checked ->
-                                                    selectedPackages = if (checked) {
-                                                        selectedPackages + pkg
-                                                    } else {
-                                                        selectedPackages - pkg
-                                                    }
+                                        testFields.forEach { field ->
+                                            RenderDynamicConfigField(
+                                                field = field,
+                                                currentVal = configStateMap[field.key] ?: "",
+                                                onValueChange = { newValue ->
+                                                    configStateMap = configStateMap + (field.key to newValue)
                                                 }
                                             )
-                                            val bitmap = remember(icon) {
-                                                try {
-                                                    icon?.toBitmap(width = 48, height = 48)?.asImageBitmap()
-                                                } catch (_: Exception) { null }
-                                            }
-                                            if (bitmap != null) {
-                                                Image(bitmap = bitmap, contentDescription = null, modifier = Modifier.size(24.dp))
-                                            } else {
-                                                Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-                                                    Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                }
-                                            }
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text(text = appName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-                                                Text(text = pkg, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                            }
                                         }
                                     }
                                 }
-
-                                Button(
-                                    onClick = { showAppPickerSheet = false },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("Done")
-                                }
                             }
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-                    InfoTooltipField(
-                        value = textRegex,
-                        onValueChange = { textRegex = it },
-                        label = "Notification Text Regex",
-                        tooltipText = "Regex matching notification text content.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "🧪 Contextual Test Simulation Payload",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    InfoTooltipField(
-                        value = testPackageName,
-                        onValueChange = { testPackageName = it },
-                        label = "Simulated Package Name",
-                        tooltipText = "Mock app package name for testing.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    InfoTooltipField(
-                        value = testTitle,
-                        onValueChange = { testTitle = it },
-                        label = "Simulated Notification Title",
-                        tooltipText = "Mock notification title for testing.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    InfoTooltipField(
-                        value = testText,
-                        onValueChange = { testText = it },
-                        label = "Simulated Notification Text",
-                        tooltipText = "Mock notification text for testing.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = false,
-                        minLines = 2
-                    )
                 }
-                NodeType.PARSE_NOTIFICATION, NodeType.REGEX_PARSER -> {
-                    InfoTooltipField(
-                        value = regexPattern,
-                        onValueChange = { regexPattern = it },
-                        label = "Regular Expression (e.g. \\b\\d{6}\\b)",
-                        tooltipText = "Regular expression with capture groups to extract variable data.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    InfoTooltipField(
-                        value = outputKey,
-                        onValueChange = { outputKey = it },
-                        label = "Output Variable Key (e.g. code)",
-                        tooltipText = "Context variable key where the parsed value is saved.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                }
-                NodeType.JSON_PARSER -> {
-                    InfoTooltipField(
-                        value = jsonKey,
-                        onValueChange = { jsonKey = it },
-                        label = "JSON Property Path (e.g. data.code)",
-                        tooltipText = "Dot-notation path to extract property from JSON response.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    InfoTooltipField(
-                        value = outputKey,
-                        onValueChange = { outputKey = it },
-                        label = "Output Variable Key",
-                        tooltipText = "Context variable key where the extracted value is saved.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                }
-                NodeType.TEMPLATE_FORMATTER -> {
-                    AutocompleteTextField(
-                        value = template,
-                        onValueChange = { template = it },
-                        label = "Message Template (e.g. OTP: \${code})",
-                        tooltipText = "Message template formatting rules. Supports variables like \${body}, \${sender}, \${code}.",
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3
-                    )
-                }
-                NodeType.CONDITION -> {
-                    InfoTooltipField(
-                        value = condVariable,
-                        onValueChange = { condVariable = it },
-                        label = "Variable Name to Check",
-                        tooltipText = "Context variable name evaluated by condition.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    InfoTooltipField(
-                        value = condValue,
-                        onValueChange = { condValue = it },
-                        label = "Expected Target Value",
-                        tooltipText = "Expected target value for conditional evaluation.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                }
-                NodeType.NTFY_ACTION -> {
-                    val selectedCred = credentials.find { it.id == credentialId }
-                    val credServerUrl = selectedCred?.dataMap?.get("serverUrl") ?: ""
-                    val credTopic = selectedCred?.dataMap?.get("topic") ?: ""
-                    val isCredAttached = credentialId.isNotBlank() && selectedCred != null
-
-                    if (isCredAttached) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(
-                                    text = "🔑 Attached Credential: ${selectedCred.name}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                if (credServerUrl.isNotBlank()) {
-                                    Text(
-                                        text = "Default URL: $credServerUrl",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                }
-                                if (credTopic.isNotBlank()) {
-                                    Text(
-                                        text = "Default Topic: $credTopic",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    InfoTooltipField(
-                        value = serverUrl,
-                        onValueChange = { serverUrl = it },
-                        label = "ntfy Server URL (Leave blank for credential default)",
-                        tooltipText = "Target ntfy push notification server base URL (e.g. https://ntfy.sh). Leave blank for credential default.",
-                        placeholder = credServerUrl.ifBlank { "https://ntfy.sh" },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    InfoTooltipField(
-                        value = topic,
-                        onValueChange = { topic = it },
-                        label = "Topic Name (Leave blank for credential default)",
-                        tooltipText = "Secret destination topic name on ntfy server (e.g. my-topic). Leave blank for credential default.",
-                        placeholder = credTopic.ifBlank { "my-topic" },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    InfoTooltipField(
-                        value = token,
-                        onValueChange = { token = it },
-                        label = "Auth Token (Optional Override)",
-                        tooltipText = "Optional access token override for protected ntfy topics.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    InfoTooltipField(
-                        value = title,
-                        onValueChange = { title = it },
-                        label = "Notification Title",
-                        tooltipText = "The bold title header displayed at the top of the ntfy push notification banner on your phone or web app.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    
-                    val ntfyPriorityOptions = remember {
-                        listOf(
-                            "5" to "Max / Urgent (5)",
-                            "4" to "High (4)",
-                            "3" to "Default / Normal (3)",
-                            "2" to "Low (2)",
-                            "1" to "Min / Silent (1)"
-                        )
-                    }
-                    val currentNtfyPriorityLabel = remember(priority) {
-                        ntfyPriorityOptions.find { it.first == priority }?.second ?: "Priority $priority"
-                    }
-
-                    SearchableDropdownSelector(
-                        selectedItemText = currentNtfyPriorityLabel,
-                        label = "Notification Priority",
-                        searchPlaceholder = "Filter priority...",
-                        items = ntfyPriorityOptions,
-                        itemText = { it.second },
-                        onItemSelected = { option ->
-                            if (option != null) priority = option.first
-                        },
-                        isItemSelected = { option -> option.first == priority },
-                        showNoneOption = false,
-                        tooltipText = "Push notification priority level on ntfy server. Higher priority triggers sound, vibration, and banner pop-ups.",
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    InfoTooltipField(
-                        value = tags,
-                        onValueChange = { tags = it },
-                        label = "Tags / Emojis (comma separated, e.g. otp,warning)",
-                        tooltipText = "Comma-separated tag or emoji names attached to notification (e.g. otp, warning).",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    AutocompleteTextField(
-                        value = template,
-                        onValueChange = { template = it },
-                        label = "Custom Message Body / Template (supports \${body}, \${sender})",
-                        tooltipText = "Custom push notification message body. Supports variables like \${body}, \${sender}, \${code}.",
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3
-                    )
-                }
-                NodeType.GOTIFY_ACTION -> {
-                    val selectedCred = credentials.find { it.id == credentialId }
-                    val credServerUrl = selectedCred?.dataMap?.get("serverUrl") ?: ""
-                    val isCredAttached = credentialId.isNotBlank() && selectedCred != null
-
-                    if (isCredAttached) {
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(
-                                    text = "🔑 Attached Credential: ${selectedCred.name}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                if (credServerUrl.isNotBlank()) {
-                                    Text(
-                                        text = "Default URL: $credServerUrl",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    InfoTooltipField(
-                        value = serverUrl,
-                        onValueChange = { serverUrl = it },
-                        label = "Gotify Server URL (Leave blank for credential default)",
-                        tooltipText = "Base URL of your Gotify server (e.g. https://gotify.example.com). Leave blank for credential default.",
-                        placeholder = credServerUrl.ifBlank { "https://gotify.example.com" },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    InfoTooltipField(
-                        value = appToken,
-                        onValueChange = { appToken = it },
-                        label = "App Token (Optional Override)",
-                        tooltipText = "Application token override (X-Gotify-Key) for Gotify server.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    InfoTooltipField(
-                        value = title,
-                        onValueChange = { title = it },
-                        label = "Notification Title",
-                        tooltipText = "The notification header title displayed at the top of the Gotify push notification card in the Gotify mobile app & web interface.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    val gotifyPriorityOptions = remember {
-                        listOf(
-                            "10" to "Max / Urgent (10)",
-                            "8" to "High (8)",
-                            "5" to "Default / Normal (5)",
-                            "3" to "Low (3)",
-                            "1" to "Min (1)"
-                        )
-                    }
-                    val currentGotifyPriorityLabel = remember(priority) {
-                        gotifyPriorityOptions.find { it.first == priority }?.second ?: "Priority $priority"
-                    }
-
-                    SearchableDropdownSelector(
-                        selectedItemText = currentGotifyPriorityLabel,
-                        label = "Notification Priority",
-                        searchPlaceholder = "Filter priority...",
-                        items = gotifyPriorityOptions,
-                        itemText = { it.second },
-                        onItemSelected = { option ->
-                            if (option != null) priority = option.first
-                        },
-                        isItemSelected = { option -> option.first == priority },
-                        showNoneOption = false,
-                        tooltipText = "Gotify push notification priority scale from 1 (lowest) to 10 (highest). Controls alert sounds and card placement.",
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    AutocompleteTextField(
-                        value = template,
-                        onValueChange = { template = it },
-                        label = "Custom Message Body / Template (supports \${body})",
-                        tooltipText = "Custom Gotify message body template. Supports variables like \${body}, \${code}.",
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3
-                    )
-                }
-                NodeType.HTTP_ACTION -> {
-                    SearchableDropdownSelector(
-                        selectedItemText = httpMethod,
-                        label = "HTTP Method",
-                        searchPlaceholder = "Filter method...",
-                        items = listOf("GET", "POST", "PUT", "PATCH", "DELETE"),
-                        itemText = { it },
-                        onItemSelected = { method ->
-                            if (method != null) httpMethod = method
-                        },
-                        isItemSelected = { method -> method == httpMethod },
-                        showNoneOption = false,
-                        tooltipText = "HTTP request method (GET, POST, PUT, etc.).",
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    InfoTooltipField(
-                        value = httpUrl,
-                        onValueChange = { httpUrl = it },
-                        label = "Endpoint URL",
-                        tooltipText = "Target REST API webhook URL.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    InfoTooltipField(
-                        value = httpQueryParams,
-                        onValueChange = { httpQueryParams = it },
-                        label = "Query Parameters (key=value, one per line)",
-                        tooltipText = "URL query string parameters (key=value format, one per line).",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = false,
-                        minLines = 2
-                    )
-                    HeaderInputEditor(
-                        headersString = httpHeaders,
-                        onHeadersChanged = { httpHeaders = it }
-                    )
-                    AutocompleteTextField(
-                        value = httpBody,
-                        onValueChange = { httpBody = it },
-                        label = "Request Body / Payload Template",
-                        tooltipText = "Request payload body template. Supports JSON string format and variable interpolation \${code}.",
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 4
-                    )
-                }
-                NodeType.SEND_NOTIFICATION_ACTION -> {
-                    InfoTooltipField(
-                        value = title,
-                        onValueChange = { title = it },
-                        label = "Notification Title",
-                        tooltipText = "The bold header title displayed on the local Android status bar notification shade on this device.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    AutocompleteTextField(
-                        value = template,
-                        onValueChange = { template = it },
-                        label = "Notification Message Template",
-                        tooltipText = "System notification message template. Supports variable interpolation \${body}.",
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3
-                    )
-                }
-                NodeType.SEND_SMS_ACTION -> {
-                    InfoTooltipField(
-                        value = recipient,
-                        onValueChange = { recipient = it },
-                        label = "Recipient Phone Number",
-                        tooltipText = "Destination phone number (including country code) for outgoing SMS.",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    AutocompleteTextField(
-                        value = smsBody,
-                        onValueChange = { smsBody = it },
-                        label = "SMS Body Template",
-                        tooltipText = "Outgoing SMS body text template. Supports variable interpolation \${code}.",
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3
-                    )
-                }
-                else -> {}
             }
 
             if (showPreconditionsGuard) {
@@ -1214,7 +660,8 @@ fun AutocompleteTextField(
     tooltipText: String? = null,
     modifier: Modifier = Modifier,
     minLines: Int = 1,
-    singleLine: Boolean = false
+    singleLine: Boolean = false,
+    maxLength: Int? = null
 ) {
     val commonVariables = listOf("sender", "body", "code", "http_response", "timestamp", "title", "text", "package", "formatted_payload")
     var expanded by remember { mutableStateOf(false) }
@@ -1226,71 +673,45 @@ fun AutocompleteTextField(
         if (filterQuery.isBlank()) commonVariables else commonVariables.filter { it.contains(filterQuery, ignoreCase = true) }
     }
 
-    ExposedDropdownMenuBox(
-        expanded = expanded && filteredVars.isNotEmpty(),
-        onExpandedChange = { expanded = it },
-        modifier = modifier
-    ) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = { newValue ->
-                onValueChange(newValue)
-                val lastDollarIdx = newValue.lastIndexOf('$')
-                if (lastDollarIdx >= 0 && lastDollarIdx == newValue.length - 1) {
-                    expanded = true
-                    filterQuery = ""
-                } else if (lastDollarIdx >= 0 && newValue.length > lastDollarIdx + 1 && newValue[lastDollarIdx + 1] == '{') {
-                    expanded = true
-                    filterQuery = newValue.substring(lastDollarIdx + 2).trimEnd('}')
-                } else if (lastDollarIdx >= 0 && lastDollarIdx < newValue.length && newValue.substring(lastDollarIdx).startsWith("\${")) {
-                    expanded = true
-                    val braceIdx = newValue.indexOf('}', lastDollarIdx)
-                    filterQuery = if (braceIdx > lastDollarIdx + 2) {
-                        newValue.substring(lastDollarIdx + 2, braceIdx)
+    Column(modifier = modifier) {
+        ExposedDropdownMenuBox(
+            expanded = expanded && filteredVars.isNotEmpty(),
+            onExpandedChange = { expanded = it },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = value,
+                onValueChange = { newValue ->
+                    val constrained = if (maxLength != null && newValue.length > maxLength) newValue.take(maxLength) else newValue
+                    onValueChange(constrained)
+                    val lastDollarIdx = constrained.lastIndexOf('$')
+                    if (lastDollarIdx >= 0 && lastDollarIdx == constrained.length - 1) {
+                        expanded = true
+                        filterQuery = ""
+                    } else if (lastDollarIdx >= 0 && constrained.length > lastDollarIdx + 1 && constrained[lastDollarIdx + 1] == '{') {
+                        expanded = true
+                        filterQuery = constrained.substring(lastDollarIdx + 2).trimEnd('}')
+                    } else if (lastDollarIdx >= 0 && lastDollarIdx < constrained.length && constrained.substring(lastDollarIdx).startsWith("\${")) {
+                        expanded = true
+                        val braceIdx = constrained.indexOf('}', lastDollarIdx)
+                        filterQuery = if (braceIdx > lastDollarIdx + 2) {
+                            constrained.substring(lastDollarIdx + 2, braceIdx)
+                        } else {
+                            constrained.substring(lastDollarIdx + 2)
+                        }
                     } else {
-                        newValue.substring(lastDollarIdx + 2)
+                        expanded = false
                     }
-                } else {
-                    expanded = false
-                }
-            },
-            label = { Text(label) },
-            interactionSource = interactionSource,
-            modifier = Modifier
-                .menuAnchor(MenuAnchorType.PrimaryNotEditable)
-                .fillMaxWidth(),
-            minLines = minLines,
-            singleLine = singleLine,
-            trailingIcon = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier.pointerInput(Unit) {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                                    if (event.type == PointerEventType.Press) {
-                                        event.changes.forEach { it.consume() }
-                                        filterQuery = ""
-                                        expanded = !expanded
-                                    } else if (event.type == PointerEventType.Release) {
-                                        event.changes.forEach { it.consume() }
-                                    }
-                                }
-                            }
-                        }
-                    ) {
-                        IconButton(onClick = {
-                            filterQuery = ""
-                            expanded = !expanded
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.Code,
-                                contentDescription = "Insert Variable",
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                    if (!tooltipText.isNullOrBlank()) {
+                },
+                label = { Text(label) },
+                interactionSource = interactionSource,
+                modifier = Modifier
+                    .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                    .fillMaxWidth(),
+                minLines = minLines,
+                singleLine = singleLine,
+                trailingIcon = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier.pointerInput(Unit) {
                                 awaitPointerEventScope {
@@ -1298,7 +719,8 @@ fun AutocompleteTextField(
                                         val event = awaitPointerEvent(PointerEventPass.Initial)
                                         if (event.type == PointerEventType.Press) {
                                             event.changes.forEach { it.consume() }
-                                            showTooltip = !showTooltip
+                                            filterQuery = ""
+                                            expanded = !expanded
                                         } else if (event.type == PointerEventType.Release) {
                                             event.changes.forEach { it.consume() }
                                         }
@@ -1306,63 +728,485 @@ fun AutocompleteTextField(
                                 }
                             }
                         ) {
-                            IconButton(onClick = { showTooltip = !showTooltip }) {
+                            IconButton(onClick = {
+                                filterQuery = ""
+                                expanded = !expanded
+                            }) {
                                 Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = "Field Information",
+                                    imageVector = Icons.Default.Code,
+                                    contentDescription = "Insert Variable",
                                     tint = MaterialTheme.colorScheme.primary
                                 )
                             }
-                            DropdownMenu(
-                                expanded = showTooltip,
-                                onDismissRequest = { showTooltip = false }
+                        }
+                        if (!tooltipText.isNullOrBlank()) {
+                            Box(
+                                modifier = Modifier.pointerInput(Unit) {
+                                    awaitPointerEventScope {
+                                        while (true) {
+                                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                                            if (event.type == PointerEventType.Press) {
+                                                event.changes.forEach { it.consume() }
+                                                showTooltip = !showTooltip
+                                            } else if (event.type == PointerEventType.Release) {
+                                                event.changes.forEach { it.consume() }
+                                            }
+                                        }
+                                    }
+                                }
                             ) {
-                                Column(
-                                    modifier = Modifier
-                                        .widthIn(max = 280.dp)
-                                        .padding(12.dp)
+                                IconButton(onClick = { showTooltip = !showTooltip }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = "Field Information",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = showTooltip,
+                                    onDismissRequest = { showTooltip = false }
                                 ) {
-                                    Text(
-                                        text = label,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = tooltipText,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Column(
+                                        modifier = Modifier
+                                            .widthIn(max = 280.dp)
+                                            .padding(12.dp)
+                                    ) {
+                                        Text(
+                                            text = label,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = tooltipText,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-        )
+            )
 
-        ExposedDropdownMenu(
-            expanded = expanded && filteredVars.isNotEmpty(),
-            onDismissRequest = { expanded = false }
-        ) {
-            filteredVars.forEach { v ->
-                DropdownMenuItem(
-                    text = { Text("\${$v}", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold) },
-                    onClick = {
-                        val lastDollarIdx = value.lastIndexOf('$')
-                        if (lastDollarIdx >= 0 && lastDollarIdx == value.length - 1) {
-                            val prefix = value.substring(0, lastDollarIdx)
-                            onValueChange("$prefix\${$v}")
-                        } else {
-                            val spacer = if (value.isNotBlank() && !value.endsWith(" ")) " " else ""
-                            onValueChange("$value$spacer\${$v}")
+            ExposedDropdownMenu(
+                expanded = expanded && filteredVars.isNotEmpty(),
+                onDismissRequest = { expanded = false }
+            ) {
+                filteredVars.forEach { v ->
+                    DropdownMenuItem(
+                        text = { Text("\${$v}", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold) },
+                        onClick = {
+                            val lastDollarIdx = value.lastIndexOf('$')
+                            val newVal = if (lastDollarIdx >= 0 && lastDollarIdx == value.length - 1) {
+                                val prefix = value.substring(0, lastDollarIdx)
+                                "$prefix\${$v}"
+                            } else {
+                                val spacer = if (value.isNotBlank() && !value.endsWith(" ")) " " else ""
+                                "$value$spacer\${$v}"
+                            }
+                            val constrained = if (maxLength != null && newVal.length > maxLength) newVal.take(maxLength) else newVal
+                            onValueChange(constrained)
+                            expanded = false
+                            filterQuery = ""
                         }
-                        expanded = false
-                        filterQuery = ""
-                    }
+                    )
+                }
+            }
+        }
+        if (maxLength != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Text(
+                    text = "${value.length} / $maxLength",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (value.length >= maxLength) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
     }
+}
+
+@Composable
+private fun RenderDynamicConfigField(
+    field: dev.zophop.plugin.api.ConfigFieldSpec,
+    currentVal: String,
+    onValueChange: (String) -> Unit
+) {
+    if (field.key == "packageFilter") {
+        TargetAppMultiSelectPicker(
+            selectedPackagesString = currentVal,
+            onPackagesChanged = onValueChange
+        )
+    } else if (field.key == "testPackageName") {
+        SingleAppDropdownSelector(
+            selectedPackage = currentVal,
+            onPackageSelected = onValueChange
+        )
+    } else {
+        when (field) {
+            is dev.zophop.plugin.api.ConfigFieldSpec.TextField -> {
+                InfoTooltipField(
+                    value = currentVal,
+                    onValueChange = onValueChange,
+                    label = field.label,
+                    tooltipText = field.tooltip ?: field.label,
+                    placeholder = field.placeholder,
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = field.singleLine,
+                    minLines = field.minLines
+                )
+            }
+            is dev.zophop.plugin.api.ConfigFieldSpec.DropdownField -> {
+                val selectedLabel = field.options.find { it.first == currentVal }?.second ?: currentVal.ifBlank { field.options.firstOrNull()?.second ?: "" }
+                SearchableDropdownSelector(
+                    selectedItemText = selectedLabel,
+                    label = field.label,
+                    searchPlaceholder = "Filter ${field.label}...",
+                    items = field.options,
+                    itemText = { it.second },
+                    onItemSelected = { option ->
+                        if (option != null) {
+                            onValueChange(option.first)
+                        }
+                    },
+                    isItemSelected = { option -> option.first == currentVal },
+                    showNoneOption = false,
+                    tooltipText = field.tooltip ?: field.label,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            is dev.zophop.plugin.api.ConfigFieldSpec.CodeTemplateField -> {
+                if (field.key.contains("headers", ignoreCase = true)) {
+                    HeaderInputEditor(
+                        headersString = currentVal,
+                        onHeadersChanged = onValueChange
+                    )
+                } else if (field.isTestField || field.key.startsWith("test", ignoreCase = true)) {
+                    InfoTooltipField(
+                        value = currentVal,
+                        onValueChange = onValueChange,
+                        label = field.label,
+                        tooltipText = field.tooltip ?: field.label,
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = false,
+                        minLines = field.minLines
+                    )
+                } else {
+                    AutocompleteTextField(
+                        value = currentVal,
+                        onValueChange = onValueChange,
+                        label = field.label,
+                        tooltipText = field.tooltip ?: field.label,
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = field.minLines,
+                        singleLine = field.singleLine,
+                        maxLength = field.maxLength
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun TargetAppMultiSelectPicker(
+    selectedPackagesString: String,
+    onPackagesChanged: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val installedApps = remember(context) { AppListHelper.getInstalledApps(context) }
+    var selectedPackages by remember(selectedPackagesString) {
+        mutableStateOf(
+            selectedPackagesString.split(",", "\n").map { it.trim() }.filter { it.isNotEmpty() && it != ".*" }.toSet()
+        )
+    }
+    var showAppPickerSheet by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = "Target Apps Selection",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text(
+            text = if (selectedPackages.isEmpty()) "Intercepting notifications from All Apps (.*)" else "Intercepting from ${selectedPackages.size} selected app(s)",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Button(
+            onClick = { showAppPickerSheet = true },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Select Target Apps (${selectedPackages.size})")
+        }
+
+        if (selectedPackages.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                selectedPackages.forEach { pkg ->
+                    val appInfo = installedApps.find { it.packageName == pkg }
+                    val displayName = appInfo?.appName ?: pkg
+                    SuggestionChip(
+                        onClick = {
+                            val newSet = selectedPackages - pkg
+                            selectedPackages = newSet
+                            onPackagesChanged(if (newSet.isEmpty()) ".*" else newSet.joinToString(", "))
+                        },
+                        label = { Text("$displayName ✕") }
+                    )
+                }
+            }
+        }
+    }
+
+    if (showAppPickerSheet) {
+        NoSwipeBottomSheet(onDismissRequest = { showAppPickerSheet = false }) {
+            var searchQuery by remember { mutableStateOf("") }
+            val filteredApps = remember(installedApps, searchQuery) {
+                if (searchQuery.isBlank()) installedApps.filter { it.packageName != ".*" }
+                else installedApps.filter {
+                    it.packageName != ".*" && (it.appName.contains(searchQuery, ignoreCase = true) || it.packageName.contains(searchQuery, ignoreCase = true))
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Select Target Apps",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(onClick = { showAppPickerSheet = false }) {
+                        Icon(Icons.Default.Close, contentDescription = "Close")
+                    }
+                }
+
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text("Search apps by name or package...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(360.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    filteredApps.forEach { appInfo ->
+                        val isSelected = selectedPackages.contains(appInfo.packageName)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    val newSet = if (isSelected) selectedPackages - appInfo.packageName else selectedPackages + appInfo.packageName
+                                    selectedPackages = newSet
+                                    onPackagesChanged(if (newSet.isEmpty()) ".*" else newSet.joinToString(", "))
+                                }
+                                .padding(vertical = 8.dp, horizontal = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Checkbox(
+                                checked = isSelected,
+                                onCheckedChange = { checked ->
+                                    val newSet = if (checked) selectedPackages + appInfo.packageName else selectedPackages - appInfo.packageName
+                                    selectedPackages = newSet
+                                    onPackagesChanged(if (newSet.isEmpty()) ".*" else newSet.joinToString(", "))
+                                }
+                            )
+                            val bitmap = remember(appInfo.icon) {
+                                try {
+                                    appInfo.icon?.toBitmap(width = 48, height = 48)?.asImageBitmap()
+                                } catch (_: Exception) { null }
+                            }
+                            if (bitmap != null) {
+                                Image(bitmap = bitmap, contentDescription = null, modifier = Modifier.size(24.dp))
+                            } else {
+                                Box(modifier = Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                                    Icon(Icons.Default.Apps, contentDescription = null, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = appInfo.appName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                                Text(text = appInfo.packageName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+
+                Button(
+                    onClick = { showAppPickerSheet = false },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Done")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SingleAppDropdownSelector(
+    selectedPackage: String,
+    onPackageSelected: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val installedApps = remember(context) { AppListHelper.getInstalledApps(context).filter { it.packageName != ".*" } }
+    val selectedApp = installedApps.find { it.packageName == selectedPackage }
+    val displayLabel = selectedApp?.appName ?: selectedPackage.ifBlank { "Select Target App" }
+
+    SearchableDropdownSelector(
+        selectedItemText = displayLabel,
+        label = "Simulated Target Package",
+        searchPlaceholder = "Search installed apps...",
+        items = installedApps,
+        itemText = { "${it.appName} (${it.packageName})" },
+        onItemSelected = { app ->
+            if (app != null) {
+                onPackageSelected(app.packageName)
+            }
+        },
+        isItemSelected = { app -> app.packageName == selectedPackage },
+        showNoneOption = false,
+        tooltipText = "Select installed application to simulate notification origin during test runs.",
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+private fun isNotificationListenerEnabled(context: android.content.Context): Boolean {
+    val pkg = context.packageName
+    val flat = android.provider.Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+    return flat != null && flat.contains(pkg)
+}
+
+private fun validateNodeConfig(nodeType: String, config: Map<String, String>): String? {
+    when {
+        nodeType.contains("SEND_SMS_ACTION", ignoreCase = true) -> {
+            val recipient = config["recipient"]?.trim() ?: ""
+            val body = config["body"]?.trim() ?: ""
+            if (recipient.isBlank()) return "Recipient phone number cannot be blank."
+            if (body.isBlank()) return "Message body cannot be blank."
+        }
+        nodeType.contains("SEND_NOTIFICATION_ACTION", ignoreCase = true) -> {
+            val title = config["title"]?.trim() ?: ""
+            val body = config["body"]?.trim() ?: ""
+            if (title.isBlank()) return "Notification title cannot be blank."
+            if (body.isBlank()) return "Notification content body cannot be blank."
+        }
+        nodeType.contains("HTTP_ACTION", ignoreCase = true) -> {
+            val url = config["url"]?.trim() ?: config["serverUrl"]?.trim() ?: ""
+            if (url.isBlank()) return "HTTP URL cannot be blank."
+            if (!url.startsWith("http://", ignoreCase = true) && !url.startsWith("https://", ignoreCase = true)) {
+                return "HTTP URL must start with http:// or https://."
+            }
+        }
+        nodeType.contains("NTFY_ACTION", ignoreCase = true) -> {
+            val serverUrl = config["serverUrl"]?.trim() ?: ""
+            val topic = config["topic"]?.trim() ?: ""
+            if (serverUrl.isBlank()) return "Server URL cannot be blank."
+            if (topic.isBlank()) return "Topic name cannot be blank."
+        }
+        nodeType.contains("GOTIFY_ACTION", ignoreCase = true) -> {
+            val serverUrl = config["serverUrl"]?.trim() ?: ""
+            val appToken = config["appToken"]?.trim() ?: ""
+            if (serverUrl.isBlank()) return "Server URL cannot be blank."
+            if (appToken.isBlank()) return "App Token cannot be blank."
+        }
+        nodeType.contains("TELEGRAM_ACTION", ignoreCase = true) -> {
+            val botToken = config["botToken"]?.trim() ?: ""
+            val chatId = config["chatId"]?.trim() ?: ""
+            val credentialId = config["credentialId"]?.trim() ?: ""
+            if (botToken.isBlank() && credentialId.isBlank()) return "Either Telegram Bot Token or an attached credential must be provided."
+            if (chatId.isBlank()) return "Telegram Chat ID cannot be blank."
+        }
+        nodeType.contains("REGEX_PARSER", ignoreCase = true) -> {
+            val regex = config["regex"]?.trim() ?: ""
+            val outputKey = config["outputKey"]?.trim() ?: ""
+            if (regex.isBlank()) return "Regular expression pattern cannot be blank."
+            try {
+                java.util.regex.Pattern.compile(regex)
+            } catch (e: Exception) {
+                return "Invalid regular expression: ${e.message}"
+            }
+            if (outputKey.isBlank()) return "Output variable name cannot be blank."
+        }
+        nodeType.contains("JSON_PARSER", ignoreCase = true) -> {
+            val jsonKey = config["jsonKey"]?.trim() ?: ""
+            val outputKey = config["outputKey"]?.trim() ?: ""
+            if (jsonKey.isBlank()) return "JSON path key cannot be blank."
+            if (outputKey.isBlank()) return "Output variable name cannot be blank."
+        }
+        nodeType.contains("TEMPLATE_FORMATTER", ignoreCase = true) -> {
+            val template = config["template"]?.trim() ?: ""
+            if (template.isBlank()) return "Template text cannot be blank."
+        }
+        nodeType.contains("CONDITION", ignoreCase = true) -> {
+            val variable = config["variable"]?.trim() ?: ""
+            val operator = config["operator"]?.trim() ?: ""
+            if (variable.isBlank()) return "Condition variable cannot be blank."
+            if (operator.isBlank()) return "Condition operator must be selected."
+        }
+        nodeType.contains("CRON_TRIGGER", ignoreCase = true) -> {
+            val cronExpression = config["cronExpression"]?.trim() ?: ""
+            if (cronExpression.isBlank()) return "Schedule interval or cron expression cannot be blank."
+        }
+        nodeType.contains("SMS_TRIGGER", ignoreCase = true) -> {
+            val allowlist = config["allowlist"]?.trim() ?: ""
+            val keywordRegex = config["keywordRegex"]?.trim() ?: ""
+            if (allowlist.isNotBlank() && allowlist != ".*") {
+                try {
+                    java.util.regex.Pattern.compile(allowlist.replace("*", ".*"))
+                } catch (e: Exception) {
+                    return "Invalid sender allowlist regex: ${e.message}"
+                }
+            }
+            if (keywordRegex.isNotBlank() && keywordRegex != ".*") {
+                try {
+                    java.util.regex.Pattern.compile(keywordRegex)
+                } catch (e: Exception) {
+                    return "Invalid keyword regex: ${e.message}"
+                }
+            }
+        }
+        nodeType.contains("NOTIFICATION_TRIGGER", ignoreCase = true) -> {
+            val textRegex = config["textRegex"]?.trim() ?: ""
+            if (textRegex.isNotBlank() && textRegex != ".*") {
+                try {
+                    java.util.regex.Pattern.compile(textRegex)
+                } catch (e: Exception) {
+                    return "Invalid text regex filter: ${e.message}"
+                }
+            }
+        }
+    }
+    return null
 }

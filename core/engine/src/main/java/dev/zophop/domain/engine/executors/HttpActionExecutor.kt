@@ -3,7 +3,9 @@ package dev.zophop.domain.engine.executors
 import android.content.Context
 import android.util.Base64
 import dev.zophop.data.CredentialRepository
-import dev.zophop.domain.engine.ExecutionContext
+import dev.zophop.plugin.api.ExecutionContext
+import dev.zophop.plugin.api.NodeExecutionResult
+import dev.zophop.plugin.api.NodeExecutor
 import dev.zophop.domain.model.Credential
 import dev.zophop.domain.model.CredentialType
 import dev.zophop.domain.model.WorkflowNode

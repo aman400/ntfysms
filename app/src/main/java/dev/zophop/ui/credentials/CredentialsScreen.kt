@@ -524,7 +524,7 @@ fun CredentialCardItem(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = credential.type.displayName(),
+                                text = credential.type.replace("_", " "),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 11.sp

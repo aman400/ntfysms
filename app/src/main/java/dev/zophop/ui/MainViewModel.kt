@@ -24,7 +24,7 @@ import dev.zophop.data.RoomWorkflowRepository
 import dev.zophop.data.toDomain
 import dev.zophop.data.WorkflowExecutionLogEntity
 import dev.zophop.data.WorkflowRepository
-import dev.zophop.domain.engine.ExecutionContext
+import dev.zophop.plugin.api.ExecutionContext
 import dev.zophop.domain.engine.ExecutionJobRegistry
 import dev.zophop.domain.engine.NodeExecutionStep
 import dev.zophop.domain.engine.PreconditionEvaluator
@@ -83,7 +83,8 @@ data class MainUiState(
     val retryingMessageId: String? = null,
     val testResultMessage: String? = null,
     val isBatteryOptimized: Boolean = true,
-    val hasNotificationListenerPermission: Boolean = false
+    val hasNotificationListenerPermission: Boolean = false,
+    val selectedWorkflowForLogs: Workflow? = null
 ) {
     val activeNodes: List<DeliveryNode>
         get() = nodes.filter { it.isEnabled && it.serverUrl.isNotBlank() }
@@ -98,6 +99,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val credentialRepository: CredentialRepository = RoomCredentialRepository(db.credentialDao())
     val preconditionRepository: PreconditionRepository = RoomPreconditionRepository(db.preconditionDao())
     private val workflowInitializer = DefaultWorkflowInitializer(workflowRepository)
+
+    private val externalPluginRegistry = dev.zophop.domain.engine.plugin.ExternalPluginRegistry(application)
+    private val _discoveredPlugins = MutableStateFlow<List<dev.zophop.domain.engine.plugin.ExternalPluginServiceInfo>>(emptyList())
+    val discoveredPlugins: StateFlow<List<dev.zophop.domain.engine.plugin.ExternalPluginServiceInfo>> = _discoveredPlugins.asStateFlow()
+
+    init {
+        discoverInstalledPlugins()
+    }
+
+    fun discoverInstalledPlugins() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val plugins = externalPluginRegistry.discoverPlugins()
+                _discoveredPlugins.value = plugins
+            } catch (_: Exception) {}
+        }
+    }
 
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -218,6 +236,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val updated = _uiState.value.nodes.filterNot { it.id == nodeId }
         _uiState.value = _uiState.value.copy(nodes = updated)
         saveCurrentSettings()
+    }
+
+    fun openWorkflowLogsById(workflowId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val wf = workflowRepository.getWorkflowById(workflowId)
+            if (wf != null) {
+                _uiState.value = _uiState.value.copy(selectedWorkflowForLogs = wf)
+            }
+        }
+    }
+
+    fun clearSelectedWorkflowForLogs() {
+        _uiState.value = _uiState.value.copy(selectedWorkflowForLogs = null)
     }
 
     fun toggleNode(nodeId: String, enabled: Boolean) {
@@ -475,32 +506,56 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val evaluator = PreconditionEvaluator(context)
             val engine = WorkflowEngine(evaluator, credentialRepository)
 
-            val triggerNode = workflow.nodes.firstOrNull {
-                it.type == NodeType.SMS_TRIGGER || it.type == NodeType.NOTIFICATION_TRIGGER || it.type == NodeType.MANUAL_TRIGGER
+            val triggerNode = workflow.nodes.firstOrNull { node ->
+                val manifest = dev.zophop.domain.engine.plugin.BuiltInPluginRegistry.getBuiltInManifestByTypeId(node.type)
+                manifest?.category == dev.zophop.plugin.api.NodeCategory.TRIGGER || node.type.contains("TRIGGER", ignoreCase = true) || workflow.connections.none { it.toNodeId == node.id }
             }
             val triggerConfig = try { JSONObject(triggerNode?.configJson ?: "{}") } catch (_: Exception) { JSONObject() }
 
             val testContextMap = mutableMapOf<String, Any>()
-            when (triggerNode?.type) {
-                NodeType.SMS_TRIGGER -> {
-                    testContextMap["sender"] = triggerConfig.optString("testSender", "+15551234567")
-                    testContextMap["body"] = triggerConfig.optString("testBody", "Your OTP verification code for bank login is 849201")
-                }
-                NodeType.NOTIFICATION_TRIGGER -> {
-                    testContextMap["package_name"] = triggerConfig.optString("testPackageName", "com.example.bankapp")
-                    testContextMap["title"] = triggerConfig.optString("testTitle", "Bank Alert: OTP Code")
-                    testContextMap["text"] = triggerConfig.optString("testText", "Your login code is 849201")
-                    testContextMap["body"] = triggerConfig.optString("testText", "Your login code is 849201")
-                }
-                NodeType.MANUAL_TRIGGER -> {
-                    testContextMap["sender"] = "ManualTrigger"
-                    testContextMap["body"] = triggerConfig.optString("testBody", "Test manual payload data 849201")
-                }
-                else -> {
-                    testContextMap["sender"] = "+15551234567"
-                    testContextMap["body"] = "Your OTP verification code for bank login is 849201"
+            val keys = triggerConfig.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                if (key.startsWith("test", ignoreCase = true) && key.length > 4) {
+                    val contextKey = key.substring(4).replaceFirstChar { it.lowercase() }
+                    val valStr = triggerConfig.optString(key, "")
+                    if (valStr.isNotBlank()) {
+                        testContextMap[contextKey] = valStr
+                        if (contextKey == "body" || contextKey == "text") {
+                            testContextMap["body"] = valStr
+                            testContextMap["text"] = valStr
+                            testContextMap["message"] = valStr
+                            testContextMap["http_response"] = valStr
+                        }
+                        if (contextKey == "sender") {
+                            testContextMap["sender"] = valStr
+                            testContextMap["header"] = valStr
+                            testContextMap["address"] = valStr
+                        }
+                        if (contextKey == "packageName") {
+                            testContextMap["package_name"] = valStr
+                            testContextMap["package"] = valStr
+                        }
+                    }
                 }
             }
+
+            if (!testContextMap.containsKey("body") && !testContextMap.containsKey("text")) {
+                val defaultBody = triggerConfig.optString("testBody", "Your OTP verification code for bank login is 849201")
+                testContextMap["body"] = defaultBody
+                testContextMap["text"] = defaultBody
+                testContextMap["message"] = defaultBody
+            }
+            if (!testContextMap.containsKey("sender")) {
+                testContextMap["sender"] = triggerConfig.optString("testSender", "+15551234567")
+            }
+            if (!testContextMap.containsKey("packageName") && !testContextMap.containsKey("package_name")) {
+                testContextMap["package_name"] = triggerConfig.optString("testPackageName", "com.example.bankapp")
+            }
+            if (!testContextMap.containsKey("title")) {
+                testContextMap["title"] = triggerConfig.optString("testTitle", "Bank Alert: OTP Code")
+            }
+
             testContextMap["received_at"] = System.currentTimeMillis()
             testContextMap["show_workflow_notifications"] = _uiState.value.showWorkflowNotifications
 
@@ -585,6 +640,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             isBatteryOptimized = checkBatteryOptimizedInternal(),
             hasNotificationListenerPermission = hasNotifPerm
         )
+        discoverInstalledPlugins()
         viewModelScope.launch(Dispatchers.IO) {
             val currentWorkflows = workflowRepository.getActiveWorkflows()
             currentWorkflows.forEach { wf ->

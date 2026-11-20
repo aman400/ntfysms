@@ -57,8 +57,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.zophop.domain.engine.plugin.CredentialSpecRegistry
 import dev.zophop.domain.model.Credential
 import dev.zophop.domain.model.CredentialType
+import dev.zophop.plugin.api.CredentialSpec
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,23 +72,24 @@ fun CredentialBottomSheet(
     onDismiss: () -> Unit,
     onSave: (Credential) -> Unit
 ) {
+    val context = LocalContext.current
+    val specRegistry = remember { dev.zophop.domain.engine.plugin.CredentialSpecRegistry(context) }
+    var credentialSpecs by remember { mutableStateOf<List<dev.zophop.plugin.api.CredentialSpec>>(emptyList()) }
+
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        credentialSpecs = specRegistry.getAllCredentialSpecs()
+    }
+
     NoSwipeBottomSheet(
         onDismissRequest = onDismiss
     ) {
         var name by remember { mutableStateOf(credential?.name ?: "") }
-        var selectedType by remember { mutableStateOf(credential?.type ?: CredentialType.BEARER_TOKEN) }
+        var selectedTypeId by remember { mutableStateOf(credential?.type ?: CredentialType.BEARER_TOKEN) }
         var expandedTypeMenu by remember { mutableStateOf(false) }
         var errorMessage by remember { mutableStateOf<String?>(null) }
 
-        val dataMap = credential?.dataMap ?: emptyMap()
-        var bearerToken by remember { mutableStateOf(dataMap["token"] ?: "") }
-        var basicUser by remember { mutableStateOf(dataMap["username"] ?: "") }
-        var basicPass by remember { mutableStateOf(dataMap["password"] ?: "") }
-        var headers by remember { mutableStateOf(dataMap["headers"] ?: "") }
-        var ntfyUrl by remember { mutableStateOf(dataMap["serverUrl"] ?: "https://ntfy.sh") }
-        var ntfyTopic by remember { mutableStateOf(dataMap["topic"] ?: "") }
-        var gotifyUrl by remember { mutableStateOf(dataMap["serverUrl"] ?: "https://gotify.example.com") }
-        var gotifyToken by remember { mutableStateOf(dataMap["appToken"] ?: "") }
+        var credentialDataMap by remember { mutableStateOf(credential?.dataMap ?: emptyMap()) }
+        val activeSpec = credentialSpecs.find { it.typeId == selectedTypeId }
 
         var showEditConfirmationDialog by remember { mutableStateOf(false) }
         var pendingSavedCredential by remember { mutableStateOf<Credential?>(null) }
@@ -126,74 +129,22 @@ fun CredentialBottomSheet(
                                     errorMessage = "Credential name cannot be blank."
                                     return@Button
                                 }
-                                when (selectedType) {
-                                    CredentialType.BEARER_TOKEN -> {
-                                        if (bearerToken.isBlank()) {
-                                            errorMessage = "API key token cannot be blank."
-                                            return@Button
-                                        }
-                                    }
-                                    CredentialType.BASIC_AUTH -> {
-                                        if (basicUser.isBlank()) {
-                                            errorMessage = "Username cannot be blank."
-                                            return@Button
-                                        }
-                                    }
-                                    CredentialType.HEADER_SET -> {
-                                        if (headers.isBlank()) {
-                                            errorMessage = "Headers string cannot be blank."
-                                            return@Button
-                                        }
-                                    }
-                                    CredentialType.NTFY_AUTH -> {
-                                        if (ntfyUrl.isBlank() || ntfyTopic.isBlank()) {
-                                            errorMessage = "Server URL and topic cannot be blank."
-                                            return@Button
-                                        }
-                                    }
-                                    CredentialType.GOTIFY_AUTH -> {
-                                        if (gotifyUrl.isBlank() || gotifyToken.isBlank()) {
-                                            errorMessage = "Server URL and app token cannot be blank."
-                                            return@Button
-                                        }
-                                    }
-                                }
                                 errorMessage = null
-
-                                val newDataMap = mutableMapOf<String, String>()
-                                when (selectedType) {
-                                    CredentialType.BEARER_TOKEN -> newDataMap["token"] = bearerToken
-                                    CredentialType.BASIC_AUTH -> {
-                                        newDataMap["username"] = basicUser
-                                        newDataMap["password"] = basicPass
-                                    }
-                                    CredentialType.HEADER_SET -> newDataMap["headers"] = headers
-                                    CredentialType.NTFY_AUTH -> {
-                                        newDataMap["serverUrl"] = ntfyUrl
-                                        newDataMap["topic"] = ntfyTopic
-                                        newDataMap["token"] = bearerToken
-                                    }
-                                    CredentialType.GOTIFY_AUTH -> {
-                                        newDataMap["serverUrl"] = gotifyUrl
-                                        newDataMap["appToken"] = gotifyToken
-                                    }
-                                }
-
-                                val updated = (credential ?: Credential(name = name, type = selectedType)).copy(
+                                val newCred = Credential(
+                                    id = credential?.id ?: java.util.UUID.randomUUID().toString(),
                                     name = name,
-                                    type = selectedType,
-                                    dataMap = newDataMap,
-                                    updatedAt = System.currentTimeMillis()
+                                    type = selectedTypeId,
+                                    dataMap = credentialDataMap
                                 )
                                 if (credential != null && (linkedWorkflowCount > 0 || linkedPreconditionCount > 0)) {
-                                    pendingSavedCredential = updated
+                                    pendingSavedCredential = newCred
                                     showEditConfirmationDialog = true
                                 } else {
-                                    onSave(updated)
+                                    onSave(newCred)
                                 }
                             }
                         ) {
-                            Text("Save Credential")
+                            Text(if (credential == null) "Create Credential" else "Save Changes")
                         }
                     }
                 }
@@ -293,8 +244,9 @@ fun CredentialBottomSheet(
                     expanded = expandedTypeMenu,
                     onExpandedChange = { expandedTypeMenu = !expandedTypeMenu }
                 ) {
+                    val activeSpecLabel = activeSpec?.displayName ?: selectedTypeId
                     OutlinedTextField(
-                        value = selectedType.displayName(),
+                        value = activeSpecLabel,
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("Credential Type") },
@@ -308,11 +260,11 @@ fun CredentialBottomSheet(
                         expanded = expandedTypeMenu,
                         onDismissRequest = { expandedTypeMenu = false }
                     ) {
-                        CredentialType.values().forEach { typeVal ->
+                        credentialSpecs.forEach { spec ->
                             DropdownMenuItem(
-                                text = { Text(typeVal.displayName()) },
+                                text = { Text(spec.displayName) },
                                 onClick = {
-                                    selectedType = typeVal
+                                    selectedTypeId = spec.typeId
                                     expandedTypeMenu = false
                                 }
                             )
@@ -320,80 +272,55 @@ fun CredentialBottomSheet(
                     }
                 }
 
-                when (selectedType) {
-                    CredentialType.BEARER_TOKEN -> {
-                        SensitiveTextField(
-                            value = bearerToken,
-                            onValueChange = { bearerToken = it },
-                            label = "API Bearer Token / Secret Key",
-                            tooltipText = "Secret authentication token or API key sent via HTTP Authorization header.",
-                            isLockEnabled = isLockEnabled,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                    CredentialType.BASIC_AUTH -> {
-                        InfoTooltipField(
-                            value = basicUser,
-                            onValueChange = { basicUser = it },
-                            label = "Username",
-                            tooltipText = "HTTP Basic authentication username.",
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        SensitiveTextField(
-                            value = basicPass,
-                            onValueChange = { basicPass = it },
-                            label = "Password",
-                            tooltipText = "HTTP Basic authentication password.",
-                            isLockEnabled = isLockEnabled,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                    CredentialType.HEADER_SET -> {
-                        HeaderInputEditor(
-                            headersString = headers,
-                            onHeadersChanged = { headers = it }
-                        )
-                    }
-                    CredentialType.NTFY_AUTH -> {
-                        InfoTooltipField(
-                            value = ntfyUrl,
-                            onValueChange = { ntfyUrl = it },
-                            label = "ntfy Server URL",
-                            tooltipText = "Base URL of your ntfy push server (e.g. https://ntfy.sh).",
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        InfoTooltipField(
-                            value = ntfyTopic,
-                            onValueChange = { ntfyTopic = it },
-                            label = "ntfy Topic Name",
-                            tooltipText = "Destination topic name on ntfy server.",
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        SensitiveTextField(
-                            value = bearerToken,
-                            onValueChange = { bearerToken = it },
-                            label = "ntfy Auth Token (Optional)",
-                            tooltipText = "Optional access token for protected ntfy topics.",
-                            isLockEnabled = isLockEnabled,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                    CredentialType.GOTIFY_AUTH -> {
-                        InfoTooltipField(
-                            value = gotifyUrl,
-                            onValueChange = { gotifyUrl = it },
-                            label = "Gotify Server URL",
-                            tooltipText = "Base URL of your Gotify push notification server.",
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        SensitiveTextField(
-                            value = gotifyToken,
-                            onValueChange = { gotifyToken = it },
-                            label = "Gotify App Token",
-                            tooltipText = "Application token generated in your Gotify dashboard.",
-                            isLockEnabled = isLockEnabled,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                if (activeSpec != null) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        activeSpec.fields.forEach { field ->
+                            val currentVal = credentialDataMap[field.key] ?: ""
+                            when (field) {
+                                is dev.zophop.plugin.api.ConfigFieldSpec.TextField -> {
+                                    val isSensitive = field.key.contains("token", true) || field.key.contains("password", true) || field.key.contains("secret", true)
+                                    if (isSensitive) {
+                                        SensitiveTextField(
+                                            value = currentVal,
+                                            onValueChange = { newValue ->
+                                                credentialDataMap = credentialDataMap + (field.key to newValue)
+                                            },
+                                            label = field.label,
+                                            tooltipText = field.tooltip ?: field.label,
+                                            isLockEnabled = isLockEnabled,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    } else {
+                                        InfoTooltipField(
+                                            value = currentVal,
+                                            onValueChange = { newValue ->
+                                                credentialDataMap = credentialDataMap + (field.key to newValue)
+                                            },
+                                            label = field.label,
+                                            tooltipText = field.tooltip ?: field.label,
+                                            placeholder = field.placeholder,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            singleLine = field.singleLine,
+                                            minLines = field.minLines
+                                        )
+                                    }
+                                }
+                                is dev.zophop.plugin.api.ConfigFieldSpec.CodeTemplateField -> {
+                                    HeaderInputEditor(
+                                        headersString = currentVal,
+                                        onHeadersChanged = { newValue ->
+                                            credentialDataMap = credentialDataMap + (field.key to newValue)
+                                        }
+                                    )
+                                }
+                                is dev.zophop.plugin.api.ConfigFieldSpec.DropdownField -> {
+                                    // Custom dropdown option field
+                                }
+                            }
+                        }
                     }
                 }
 

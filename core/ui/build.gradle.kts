@@ -29,6 +29,8 @@ kotlin {
 
 dependencies {
     implementation(project(":core:model"))
+    api(project(":core:plugin-api"))
+    api(project(":core:engine"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.fragment.ktx)

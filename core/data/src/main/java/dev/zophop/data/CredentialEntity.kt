@@ -29,7 +29,7 @@ data class CredentialEntity(
         return Credential(
             id = id,
             name = name,
-            type = try { CredentialType.valueOf(type) } catch (_: Exception) { CredentialType.BEARER_TOKEN },
+            type = type,
             dataMap = map,
             createdAt = createdAt,
             updatedAt = updatedAt
@@ -45,7 +45,7 @@ data class CredentialEntity(
             return CredentialEntity(
                 id = credential.id,
                 name = credential.name,
-                type = credential.type.name,
+                type = credential.type,
                 dataJson = json.toString(),
                 createdAt = credential.createdAt,
                 updatedAt = credential.updatedAt

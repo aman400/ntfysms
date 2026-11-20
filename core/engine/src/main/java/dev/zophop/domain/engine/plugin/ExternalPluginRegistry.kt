@@ -31,17 +31,32 @@ open class ExternalPluginRegistry(
 
     open fun getDiscoveredPlugins(): List<ExternalPluginServiceInfo> = discoveredPlugins.values.toList()
 
-    open fun getPluginByTypeId(typeId: String): ExternalPluginServiceInfo? = discoveredPlugins[typeId]
+    open fun getPluginByTypeId(typeId: String): ExternalPluginServiceInfo? {
+        val plugin = discoveredPlugins[typeId] ?: return null
+        val ctx = context ?: return plugin
+        val disabledPluginsStr = ctx.getSharedPreferences("zophop_encrypted_prefs", Context.MODE_PRIVATE)
+            .getString("disabled_plugin_packages", "") ?: ""
+        val disabledPackages = disabledPluginsStr.split(",").map { it.trim() }.toSet()
+        if (disabledPackages.contains(plugin.packageName)) return null
+        return plugin
+    }
 
     open suspend fun discoverPlugins(): List<ExternalPluginServiceInfo> = withContext(Dispatchers.IO) {
         val ctx = context ?: return@withContext emptyList()
         val intent = Intent(ACTION_NODE_SERVICE)
         val resolveInfos = ctx.packageManager.queryIntentServices(intent, 0)
 
+        val disabledPluginsStr = ctx.getSharedPreferences("zophop_encrypted_prefs", Context.MODE_PRIVATE)
+            .getString("disabled_plugin_packages", "") ?: ""
+        val disabledPackages = disabledPluginsStr.split(",").map { it.trim() }.toSet()
+
         val newMap = ConcurrentHashMap<String, ExternalPluginServiceInfo>()
 
         for (info in resolveInfos) {
             val serviceInfo = info.serviceInfo ?: continue
+            if (serviceInfo.packageName == ctx.packageName) continue
+            if (disabledPackages.contains(serviceInfo.packageName)) continue
+
             val componentName = ComponentName(serviceInfo.packageName, serviceInfo.name)
 
             val serviceIntent = Intent().apply { component = componentName }
@@ -68,25 +83,15 @@ open class ExternalPluginRegistry(
             override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
                 try {
                     val binder = INodePluginService.Stub.asInterface(service)
-                    val apiVersion = binder.getPluginApiVersion()
-                    val manifestJson = binder.getManifestJson()
-                    val rawPerms = try { binder.getRequiredPermissions() } catch (_: Exception) { emptyList<String>() }
-                    val settingsIntent = try { binder.getSettingsIntentAction() } catch (_: Exception) { "" }
-
-                    val rawManifests = NodePluginManifest.parseManifests(manifestJson)
-                    // Apply root permissions/settings fallback to nodes that didn't declare their own
-                    val manifests = rawManifests.map { manifest ->
-                        manifest.copy(
-                            requiredPermissions = manifest.requiredPermissions.ifEmpty { rawPerms },
-                            settingsIntentAction = manifest.settingsIntentAction ?: settingsIntent.ifEmpty { null }
-                        )
-                    }
+                    val apiVersion = binder.pluginApiVersion
+                    val manifests = binder.manifests
 
                     val infoList = manifests.map { manifest ->
                         ExternalPluginServiceInfo(packageName, className, manifest, apiVersion)
                     }
                     if (continuation.isActive) continuation.resume(infoList)
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    e.printStackTrace()
                     if (continuation.isActive) continuation.resume(emptyList())
                 } finally {
                     try { ctx.unbindService(this) } catch (_: Exception) {}

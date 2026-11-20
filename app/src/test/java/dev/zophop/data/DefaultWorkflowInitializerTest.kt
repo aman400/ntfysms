@@ -56,9 +56,9 @@ class DefaultWorkflowInitializerTest {
 
         assertEquals(1, repo.getWorkflowCount())
         val defaultWf = repo.workflows.first()
-        assertEquals("default_sms_workflow", defaultWf.id)
-        assertEquals(4, defaultWf.nodes.size)
-        assertEquals(3, defaultWf.connections.size)
+        assertEquals("default_manual_workflow", defaultWf.id)
+        assertEquals(3, defaultWf.nodes.size)
+        assertEquals(2, defaultWf.connections.size)
     }
 
     @Test

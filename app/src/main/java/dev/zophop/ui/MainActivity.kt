@@ -50,6 +50,7 @@ class MainActivity : FragmentActivity() {
         }
 
         checkPermissions()
+        handleIntent(intent)
 
         setContent {
             ZopHopTheme {
@@ -76,6 +77,19 @@ class MainActivity : FragmentActivity() {
         super.onResume()
         checkPermissions()
         viewModel.checkPermissionsAndStatus()
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: android.content.Intent?) {
+        val workflowId = intent?.getStringExtra("open_workflow_id")
+        if (!workflowId.isNullOrBlank()) {
+            viewModel.openWorkflowLogsById(workflowId)
+        }
     }
 
     private fun checkPermissions() {

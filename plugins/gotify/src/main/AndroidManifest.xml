@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.zophop.gotifyplugin">
+    package="dev.zophop.plugin.gotify">
 
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <application android:label="ZopHop Gotify Plugin" android:allowBackup="false" android:supportsRtl="true">
+    <application>
         <service android:name=".GotifyNodePluginService" android:exported="true">
             <intent-filter>
                 <action android:name="dev.zophop.plugin.ACTION_NODE_SERVICE" />
