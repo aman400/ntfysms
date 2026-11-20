@@ -31,8 +31,21 @@ class SmsTriggerExecutor : NodeExecutor {
         val allowlist = config.optString("allowlist", ".*")
         val keywordRegex = config.optString("keywordRegex", ".*")
 
-        val sender = context.getString("sender", "")
-        val body = context.getString("body", "")
+        val sender = context.getString("sender", "").ifEmpty {
+            context.getString("header", "").ifEmpty {
+                context.getString("sms_header", "").ifEmpty {
+                    context.getString("address", "")
+                }
+            }
+        }
+
+        val body = context.getString("body", "").ifEmpty {
+            context.getString("sms_body", "").ifEmpty {
+                context.getString("message", "").ifEmpty {
+                    context.getString("text", "")
+                }
+            }
+        }
 
         val allowlistPatterns = allowlist.split(",", "\n").map { it.trim() }.filter { it.isNotEmpty() }
         val senderMatches = allowlistPatterns.isEmpty() || allowlistPatterns.any { pattern ->
@@ -56,6 +69,16 @@ class SmsTriggerExecutor : NodeExecutor {
                 return NodeExecutionResult.Failed("Invalid keyword regex: ${e.message}")
             }
         }
+
+        // Normalize SMS Header & Body variables in context
+        context.set("sender", sender)
+        context.set("header", sender)
+        context.set("sms_header", sender)
+        context.set("address", sender)
+        context.set("body", body)
+        context.set("sms_body", body)
+        context.set("message", body)
+        context.set("text", body)
 
         return NodeExecutionResult.Success(logMessage = "SMS trigger matched sender: $sender")
     }

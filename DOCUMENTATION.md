@@ -161,7 +161,7 @@ Preconditions evaluate environmental state before executing workflow nodes or tr
 ## 6. First-Time App Setup & Installation
 
 ### Step 1: Install Signed APK
-Download and install `ZopHop-v1.0.0.apk` on Android 8.0 (API 26) or higher.
+Download and install `ZopHop-v2.0.0.apk` (or latest release build) on Android 8.0 (API 26) or higher.
 
 > [!NOTE]
 > **Bypassing Play Protect on Sideloaded Builds**  
@@ -315,3 +315,191 @@ To prevent OEM background task managers from killing ZopHop in the background:
 2. **Screen Protection (`FLAG_SECURE`)**: Screenshots and screen recordings are disabled in release builds.
 3. **Zero Telemetry**: Contains no third-party tracking, ads, or analytics SDKs.
 4. **Cloud Backup Exclusion (`allowBackup="false"`)**: Explicitly blocks Google Drive backup of app databases and credentials.
+
+---
+## 13. Modular Node Plugin Ecosystem & Developer Guide
+
+ZopHop features an open, zero-recompilation plugin architecture (similar to WhatsApp stickers) that allows third-party developers to create and publish custom workflow pipeline step nodes as standalone Android apps.
+
+### How Plugin Discovery & Execution Works
+1. Third-party developers create a standard Android app and declare an `INodePluginService` bound service with an intent-filter:
+   ```xml
+   <service android:name=".CallNodePluginService" android:exported="true">
+       <intent-filter>
+           <action android:name="dev.zophop.plugin.ACTION_NODE_SERVICE" />
+       </intent-filter>
+   </service>
+   ```
+2. ZopHop's `ExternalPluginRegistry` queries installed apps via Android `PackageManager`.
+3. ZopHop binds to the plugin app via AIDL IPC (`dev.zophop.plugin.api.INodePluginService`), reads its `NodePluginManifest` (display name, category, and dynamic `ConfigSchema`), and displays the node in ZopHop's step node selector.
+4. During workflow execution, ZopHop delegates node execution to the plugin app over AIDL with sandboxed process isolation.
+
+### Managing Plugin App Permissions
+Plugin apps request and manage their own Android runtime permissions independently (such as `READ_PHONE_STATE`, `READ_CALL_LOG`, `ANSWER_PHONE_CALLS`, `SEND_SMS`).
+- If a plugin requires a permission that has not been granted by the user, the plugin service returns `isSuccess = false` and `errorReason = "Permission missing in plugin app"`. ZopHop logs this error in the workflow execution stepper modal.
+
+---
+
+### Complete Sample Plugin Implementation: Incoming Call Handler Plugin
+
+Below is a complete, copy-pasteable example of building an **Incoming Call Trigger & Auto-Action Plugin**:
+
+#### 1. Plugin `AndroidManifest.xml`
+```xml
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.callplugin">
+
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+
+    <application android:label="ZopHop Call Trigger Plugin">
+        <service
+            android:name=".CallNodePluginService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="dev.zophop.plugin.ACTION_NODE_SERVICE" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>
+```
+
+#### 2. Plugin Service (`CallNodePluginService.kt`)
+```kotlin
+package com.example.callplugin
+
+import android.app.Service
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.IBinder
+import android.telephony.SmsManager
+import android.telephony.TelecomManager
+import dev.zophop.plugin.api.INodePluginService
+import org.json.JSONArray
+import org.json.JSONObject
+
+class CallNodePluginService : Service() {
+
+    private val binder = object : INodePluginService.Stub() {
+
+        override fun getPluginApiVersion(): Int = 1
+
+        override fun getManifestJson(): String {
+            val schema = JSONArray().apply {
+                put(JSONObject().apply {
+                    put("key", "actionType")
+                    put("label", "Action Type")
+                    put("type", "DROPDOWN")
+                    put("tooltip", "Choose action when an incoming call matches filter")
+                    put("options", JSONArray().apply {
+                        put(JSONObject().apply { put("value", "AUTO_SMS"); put("label", "Send SMS Auto-Reply") })
+                        put(JSONObject().apply { put("value", "DISCONNECT"); put("label", "Reject / Disconnect Call") })
+                    })
+                })
+                put(JSONObject().apply {
+                    put("key", "callerRegex")
+                    put("label", "Caller Number Regex Filter")
+                    put("type", "TEXT")
+                    put("tooltip", "Regex pattern matching caller phone numbers (e.g. .*555.*)")
+                })
+                put(JSONObject().apply {
+                    put("key", "smsTemplate")
+                    put("label", "SMS Auto-Reply Template")
+                    put("type", "TEMPLATE")
+                    put("tooltip", "Auto-reply text template sent to incoming caller")
+                    put("minLines", 3)
+                })
+            }
+
+            val manifest = JSONObject().apply {
+                put("typeId", "com.example.callplugin.CALL_TRIGGER_ACTION")
+                put("displayName", "Incoming Call Handler")
+                put("description", "Parses incoming caller number, sends auto-reply SMS, or disconnects call")
+                put("category", "TRIGGER")
+                put("apiVersion", 1)
+                put("configSchema", schema)
+            }
+
+            return manifest.toString()
+        }
+
+        override fun executeNode(nodeId: String, configJson: String, inputContextJson: String): String {
+            val config = try { JSONObject(configJson) } catch (_: Exception) { JSONObject() }
+            val inputCtx = try { JSONObject(inputContextJson) } catch (_: Exception) { JSONObject() }
+
+            val actionType = config.optString("actionType", "AUTO_SMS")
+            val callerRegex = config.optString("callerRegex", ".*")
+            val smsTemplate = config.optString("smsTemplate", "I'm currently busy and will call you back soon.")
+
+            val callerNumber = inputCtx.optString("caller_number", inputCtx.optString("sender", ""))
+
+            // 1. Permission Check in Plugin App
+            val hasPhonePermission = checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
+            if (!hasPhonePermission) {
+                return JSONObject().apply {
+                    put("isSuccess", false)
+                    put("errorReason", "READ_PHONE_STATE permission not granted in Call Plugin App")
+                }.toString()
+            }
+
+            // 2. Filter Caller Number
+            val matches = java.util.regex.Pattern.compile(callerRegex).matcher(callerNumber).find()
+            if (!matches) {
+                return JSONObject().apply {
+                    put("isSuccess", false)
+                    put("errorReason", "Caller number '$callerNumber' did not match filter regex '$callerRegex'")
+                }.toString()
+            }
+
+            // 3. Execute Action Logic
+            val outputMap = JSONObject()
+            outputMap.put("caller_number", callerNumber)
+
+            return when (actionType) {
+                "AUTO_SMS" -> {
+                    val hasSmsPermission = checkSelfPermission(android.Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED
+                    if (!hasSmsPermission) {
+                        return JSONObject().apply {
+                            put("isSuccess", false)
+                            put("errorReason", "SEND_SMS permission not granted in Call Plugin App")
+                        }.toString()
+                    }
+                    SmsManager.getDefault().sendTextMessage(callerNumber, null, smsTemplate, null, null)
+                    outputMap.put("sms_status", "SENT")
+
+                    JSONObject().apply {
+                        put("isSuccess", true)
+                        put("outputPort", "main")
+                        put("logMessage", "Auto-reply SMS sent to caller '$callerNumber'")
+                        put("outputDataMap", outputMap)
+                    }.toString()
+                }
+                "DISCONNECT" -> {
+                    val telecomManager = getSystemService(TELECOM_SERVICE) as TelecomManager
+                    val endSuccess = try { telecomManager.endCall(); true } catch (_: Exception) { false }
+                    outputMap.put("call_status", if (endSuccess) "DISCONNECTED" else "FAILED")
+
+                    JSONObject().apply {
+                        put("isSuccess", endSuccess)
+                        put("outputPort", "main")
+                        put("logMessage", if (endSuccess) "Disconnected incoming call from '$callerNumber'" else "Failed to end call")
+                        put("outputDataMap", outputMap)
+                    }.toString()
+                }
+                else -> {
+                    JSONObject().apply {
+                        put("isSuccess", true)
+                        put("outputPort", "main")
+                        put("logMessage", "Caller '$callerNumber' processed")
+                        put("outputDataMap", outputMap)
+                    }.toString()
+                }
+            }
+        }
+    }
+
+    override fun onBind(intent: Intent?): IBinder = binder
+}
+```

@@ -9,6 +9,17 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="assets/app-icon.svg">
+  <script>
+    const APP_VERSION = "2.0.0";
+    document.addEventListener("DOMContentLoaded", () => {
+      document.querySelectorAll(".app-version").forEach(el => el.textContent = APP_VERSION);
+      document.querySelectorAll(".app-version-v").forEach(el => el.textContent = "v" + APP_VERSION);
+      document.querySelectorAll(".app-apk-name").forEach(el => el.textContent = "ZopHop-v" + APP_VERSION + ".apk");
+      document.querySelectorAll("a.app-apk-link").forEach(el => {
+        el.href = `https://github.com/aman400/zophop/releases/download/v${APP_VERSION}/ZopHop-v${APP_VERSION}.apk`;
+      });
+    });
+  </script>
   <style>
     :root {
       /* App Theme Palette: Emerald (Primary) & Amber (Secondary) & Deep Slate Dark */
@@ -473,9 +484,9 @@
         Capture incoming OTP SMS and app push notifications, evaluate network preconditions, execute graph-based visual workflow automation, and deliver encrypted payloads to ntfy, Gotify, and custom HTTP Webhook APIs.
       </p>
       <div class="hero-actions">
-        <a href="https://github.com/aman400/zophop/releases" target="_blank" class="btn btn-primary">
+        <a href="https://github.com/aman400/zophop/releases" target="_blank" class="btn btn-primary app-apk-link">
           <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-          Download ZopHop v1.0.0 APK
+          Download ZopHop <span class="app-version-v">v2.0.0</span> APK
         </a>
         <a href="#workflows" class="btn btn-secondary">Explore Workflow Builder</a>
       </div>
@@ -492,7 +503,7 @@
     <div class="arch-card">
       <div class="arch-header">
         <div class="arch-title">⚡ End-to-End Event Pipeline Architecture</div>
-        <span style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--primary);">System Flow v1.0.0</span>
+        <span style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--primary);">System Flow <span class="app-version-v">v2.0.0</span></span>
       </div>
       <div class="arch-svg-container">
         <svg viewBox="0 0 1000 240" width="100%" height="240" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -680,7 +691,7 @@
       <div class="card" style="margin-bottom: 24px;">
         <h3 class="card-title">Step 1: Install APK & Grant Android Permissions</h3>
         <p class="card-text" style="margin-bottom: 14px;">
-          Download <code>ZopHop-v1.0.0.apk</code> and install on Android 8.0+. When Google Play Protect prompt appears, tap <strong>"More details"</strong> → <strong>"Install anyway"</strong>.
+          Download <code class="app-apk-name">ZopHop-v2.0.0.apk</code> and install on Android 8.0+. When Google Play Protect prompt appears, tap <strong>"More details"</strong> → <strong>"Install anyway"</strong>.
         </p>
         <div class="code-box">
           <span class="code-label">ADB Shell</span>
@@ -789,7 +800,7 @@
   <footer>
     <div class="container footer-content">
       <div>
-        <p><strong>ZopHop Forwarder v1.0.0</strong> — Built for Android 8.0+ (API 26–37)</p>
+        <p><strong>ZopHop Forwarder <span class="app-version-v">v2.0.0</span></strong> — Built for Android 8.0+ (API 26–37)</p>
         <p style="margin-top: 4px;">Open-source software released under MIT License.</p>
       </div>
       <div style="display: flex; gap: 16px;">

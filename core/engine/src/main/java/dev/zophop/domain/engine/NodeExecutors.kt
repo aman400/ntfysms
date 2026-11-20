@@ -14,6 +14,8 @@ import dev.zophop.domain.engine.executors.SendNotificationExecutor
 import dev.zophop.domain.engine.executors.SendSmsExecutor
 import dev.zophop.domain.engine.executors.SmsTriggerExecutor
 import dev.zophop.domain.engine.executors.TemplateFormatterExecutor
+import dev.zophop.domain.engine.plugin.ExternalPluginExecutor
+import dev.zophop.domain.engine.plugin.ExternalPluginRegistry
 import dev.zophop.domain.model.NodeType
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -25,7 +27,8 @@ open class NodeExecutorFactory(
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
         .build(),
-    private val credentialRepository: CredentialRepository? = null
+    private val credentialRepository: CredentialRepository? = null,
+    private val pluginRegistry: ExternalPluginRegistry? = null
 ) {
 
     open fun getExecutor(type: NodeType): NodeExecutor {
@@ -43,5 +46,10 @@ open class NodeExecutorFactory(
             NodeType.SEND_NOTIFICATION_ACTION -> SendNotificationExecutor()
             NodeType.SEND_SMS_ACTION -> SendSmsExecutor()
         }
+    }
+
+    open fun getCustomExecutorByTypeId(typeId: String): NodeExecutor? {
+        val pluginInfo = pluginRegistry?.getPluginByTypeId(typeId) ?: return null
+        return ExternalPluginExecutor(pluginInfo)
     }
 }

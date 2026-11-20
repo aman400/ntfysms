@@ -55,7 +55,13 @@ class SmsReceiver : BroadcastReceiver() {
                 val execContext = ExecutionContext(
                     mapOf(
                         "sender" to sender,
+                        "header" to sender,
+                        "sms_header" to sender,
+                        "address" to sender,
                         "body" to fullBody,
+                        "sms_body" to fullBody,
+                        "message" to fullBody,
+                        "text" to fullBody,
                         "received_at" to System.currentTimeMillis()
                     )
                 )

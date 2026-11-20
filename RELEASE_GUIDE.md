@@ -1,5 +1,7 @@
 # ZopHop Signed Release & GitHub Publishing Guide
 
+<!-- APP_VERSION = "2.0.0" -->
+
 This guide details how to generate signed Release APKs locally and how to set up automated GitHub Release publishing.
 
 ---
@@ -30,7 +32,7 @@ KEY_PASSWORD=your_password \
 
 The signed, optimized Release APK will be generated at:
 ```text
-app/build/outputs/apk/release/ZopHop-v1.0.0.apk
+app/build/outputs/apk/release/ZopHop-v2.0.0.apk
 ```
 
 ---
@@ -56,14 +58,16 @@ Navigate to **Settings** → **Secrets and variables** → **Actions** → Add t
 *(If secrets are omitted, GitHub Actions will fall back to auto-generating signed release builds.)*
 
 ### Step B: Publish a New Release Tag
-To publish a new GitHub Release automatically, tag your commit and push to GitHub:
+To publish a new GitHub Release automatically, tag your commit with the target version and push to GitHub:
 
 ```bash
-git tag -a v1.0.0 -m "ZopHop v1.0.0 Release"
-git push origin v1.0.0
+VERSION="2.0.0"
+
+git tag -a v$VERSION -m "ZopHop v$VERSION Release"
+git push origin v$VERSION
 ```
 
 GitHub Actions will automatically:
 1. Compile and optimize R8 ProGuard release binaries.
-2. Sign the output APK (`ZopHop-v1.0.0.apk`).
+2. Sign the output APK (`ZopHop-v2.0.0.apk`).
 3. Create a GitHub Release and attach the APK asset for direct download.

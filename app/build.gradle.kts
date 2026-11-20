@@ -71,8 +71,9 @@ androidComponents {
     }
     onVariants { variant ->
         val suffix = if (variant.buildType == "debug") "-Debug" else ""
+        val verName = android.defaultConfig.versionName ?: "2.0.0"
         variant.outputs.forEach { output ->
-            output.outputFileName.set("ZopHop${suffix}-v1.0.0.apk")
+            output.outputFileName.set("ZopHop${suffix}-v${verName}.apk")
         }
     }
 }
@@ -91,6 +92,7 @@ tasks.whenTaskAdded {
 
 dependencies {
     implementation(project(":core:model"))
+    implementation(project(":core:plugin-api"))
     implementation(project(":core:data"))
     implementation(project(":core:engine"))
     implementation(project(":core:ui"))

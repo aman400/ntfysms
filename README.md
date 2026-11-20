@@ -21,7 +21,7 @@ It is designed for personal use, home lab owners, and self-hosters running serve
 ## Complete User Documentation & Release Guides
 
 - **📖 [Full User & Setup Manual](DOCUMENTATION.md)** — Comprehensive guide covering ntfy & Gotify setup, Tailscale VPN integration, regex extraction, and OEM battery settings.
-- **📦 [Signed Release & GitHub Publishing Guide](RELEASE_GUIDE.md)** — Guide on building signed release APKs (`ZopHop-v1.0.0.apk`) and setting up GitHub Actions.
+- **📦 [Signed Release & GitHub Publishing Guide](RELEASE_GUIDE.md)** — Guide on building signed release APKs (`ZopHop-vx.x.x.apk`) and setting up GitHub Actions.
 - **🌐 [GitHub Pages Landing Page](https://aman400.github.io/zophop)** — Web documentation and APK download showcase.
 
 ---
@@ -33,11 +33,11 @@ It is designed for personal use, home lab owners, and self-hosters running serve
 ./gradlew assembleRelease
 ```
 The optimized release binary is generated at:
-`app/build/outputs/apk/release/ZopHop-v1.0.0.apk`
+`app/build/outputs/apk/release/ZopHop-vx.x.x.apk`
 
 ### 2. Install via ADB or Sideload
 ```bash
-adb install -r -g app/build/outputs/apk/release/ZopHop-v1.0.0.apk
+adb install -r -g app/build/outputs/apk/release/ZopHop-vx.x.x.apk
 ```
 
 > **⚠️ Bypassing / Disabling Play Protect**:

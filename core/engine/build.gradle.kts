@@ -14,6 +14,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    buildFeatures {
+        aidl = true
+    }
 }
 
 kotlin {
@@ -24,6 +27,7 @@ kotlin {
 
 dependencies {
     implementation(project(":core:model"))
+    api(project(":core:plugin-api"))
     implementation(project(":core:data"))
 
     implementation(libs.androidx.core.ktx)

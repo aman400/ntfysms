@@ -111,6 +111,15 @@ fun NodeConfigBottomSheet(
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
 
+    val externalPluginRegistry = remember { dev.zophop.domain.engine.plugin.ExternalPluginRegistry(context) }
+    var pluginManifest by remember { mutableStateOf<dev.zophop.plugin.api.NodePluginManifest?>(null) }
+
+    androidx.compose.runtime.LaunchedEffect(node.type.name) {
+        if (!node.type.name.startsWith("com.")) return@LaunchedEffect
+        val plugins = externalPluginRegistry.discoverPlugins()
+        pluginManifest = plugins.find { it.manifest.typeId == node.type.name }?.manifest
+    }
+
     val sendSmsPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { _ -> }
@@ -133,6 +142,33 @@ fun NodeConfigBottomSheet(
                 } catch (_: Exception) {}
             }
         )
+        pluginManifest?.requiredPermissions?.isNotEmpty() == true -> {
+            val manifest = pluginManifest!!
+            val isGranted = manifest.requiredPermissions.all { perm ->
+                androidx.core.content.ContextCompat.checkSelfPermission(context, perm) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            }
+            if (!isGranted) {
+                Quadruple(
+                    true,
+                    "⚠️ Plugin Permission Missing",
+                    "Node requires ${manifest.requiredPermissions.joinToString(", ")}. Grant in Plugin Settings.",
+                    {
+                        if (manifest.settingsIntentAction != null) {
+                            try { context.startActivity(Intent(manifest.settingsIntentAction)) } catch (_: Exception) {}
+                        } else {
+                            try {
+                                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = android.net.Uri.parse("package:" + manifest.typeId.substringBeforeLast("."))
+                                }
+                                context.startActivity(intent)
+                            } catch (_: Exception) {}
+                        }
+                    }
+                )
+            } else {
+                Quadruple(false, "", "", {})
+            }
+        }
         node.type == NodeType.SMS_TRIGGER && !hasSmsPermission -> Quadruple(
             true,
             "⚠️ SMS Permission Missing (RECEIVE_SMS)",

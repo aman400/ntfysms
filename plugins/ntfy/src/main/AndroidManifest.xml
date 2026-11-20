@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.zophop.ntfyplugin">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application android:label="ZopHop ntfy Plugin" android:allowBackup="false" android:supportsRtl="true">
+        <service android:name=".NtfyNodePluginService" android:exported="true">
+            <intent-filter>
+                <action android:name="dev.zophop.plugin.ACTION_NODE_SERVICE" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

@@ -27,8 +27,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
@@ -45,6 +47,7 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -527,6 +530,65 @@ fun SettingsScreen(
                                     }
                                 ) {
                                     Text("Fix", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Installed External Node Plugins Section
+            item {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(
+                            text = "🧩 Installed Node Plugins",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Discovers third-party plugin apps installed on this device that export custom workflow pipeline step nodes.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Extension,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Open Node Plugin Ecosystem",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Text(
+                                        text = "Developers can build and publish custom nodes as standalone Android apps using the ZopHop Plugin API.",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
                                 }
                             }
                         }
